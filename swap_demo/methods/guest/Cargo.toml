@@ -22,4 +22,6 @@ token_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.g
 #       we cannot reference directly the oracle_prices core)
 #       so we need to use a git dependency here
 # oracle_prices_core = { path = "../../../oracle_prices/oracle_prices_core" }
-oracle_prices_core = { git = "https://github.com/sydhds/logos_oracle_network.git", branch = "features/swap_demo_1" }
+# Note 2: cannot do that as submodules is dirty (for now)
+# oracle_prices_core = { git = "https://github.com/sydhds/logos_oracle_network.git", branch = "features/swap_demo_1" }
+# Note 3: for now, PriceState struct (from oracle prices) is dup into swap demo core

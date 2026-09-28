@@ -24,7 +24,9 @@ impl Default for SwapDemoState {
 mod swap_demo {
 
     // use nssa_core::program::Claim::Pda;
-    use oracle_prices_core::PriceState;
+    // use oracle_prices_core::PriceState;
+    use swap_demo_core::PriceState;
+
     #[allow(unused_imports)]
     use super::*;
 
@@ -196,7 +198,7 @@ mod swap_demo {
         let data: Vec<u8> = swap_state.account.data.clone().into();
         let mut state: SwapDemoState = borsh::from_slice(&data).map_err(|e| {
             SpelError::DeserializationError {
-                account_index: 0,
+                account_index: 1,
                 message: e.to_string(),
             }
         })?;
@@ -221,7 +223,7 @@ mod swap_demo {
         let data_pf: Vec<u8> = price_feed.account.data.clone().into();
         let mut state_pf: PriceState = borsh::from_slice(&data_pf).map_err(|e| {
             SpelError::DeserializationError {
-                account_index: 0,
+                account_index: 2,
                 message: e.to_string(),
             }
         })?;
@@ -267,7 +269,7 @@ mod swap_demo {
         let instruction_transfer = TokenInstruction::Transfer { amount_to_transfer: amount_b.into() };
         let instruction_data_transfer = to_vec(&instruction_transfer).map_err(|err| {
             SpelError::Custom {
-                code: 20,
+                code: 22,
                 message: err.to_string(),
             }
         })?;

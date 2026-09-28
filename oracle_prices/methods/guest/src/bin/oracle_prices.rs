@@ -69,6 +69,8 @@ mod oracle_prices {
         })?;
         oracle_prices_account.account.data = bytes.try_into().unwrap();
 
+        println!("AA feed price: {:?}", feed_price);
+
         Ok(SpelOutput::execute(vec![oracle_prices_account, feed_price], vec![]))
     }
 
