@@ -46,9 +46,9 @@ fn main() -> anyhow::Result<()> {
     //    .map_err(|_| anyhow!("Invalid hex string or wrong length (must be exactly 64 hex characters)"))?;
     let def_account: [u8; 32] = bs58::decode(&def_account_)
         .into_vec()
-        .unwrap()
+        .expect("Cannot decode base 58")
         .try_into()
-        .unwrap();
+        .expect("Cannot convert base58 decoded bytes to [u8; 32]");
 
     let program_id_path = "methods/guest/target/riscv32im-risc0-zkvm-elf/docker/swap_demo.bin";
     println!("program path: {:?}", program_id_path);

@@ -22,7 +22,9 @@ impl Default for SwapDemoState {
 
 #[lez_program]
 mod swap_demo {
-    use nssa_core::program::Claim::Pda;
+
+    // use nssa_core::program::Claim::Pda;
+    use oracle_prices_core::PriceState;
     #[allow(unused_imports)]
     use super::*;
 
@@ -111,7 +113,7 @@ mod swap_demo {
     }
     */
 
-
+    /// initialize a pool account (PDA: lit("swap_demo_pool") + account("token_def_account"))
     #[instruction]
     pub fn initialize_pool(
         #[account(mut, pda = literal("swap_demo"))]
@@ -189,7 +191,7 @@ mod swap_demo {
         pool_b_pda_seed: [u8; 32],
     ) -> SpelResult {
 
-        println!("swap - AC");
+        println!("swap - AG...");
 
         let data: Vec<u8> = swap_state.account.data.clone().into();
         let mut state: SwapDemoState = borsh::from_slice(&data).map_err(|e| {
@@ -202,22 +204,48 @@ mod swap_demo {
         let token_pg_id = ProgramId::from(state.token_program_id);
         println!("token program id: {:?}", token_pg_id);
 
+        // TODO Checks
+        // amount_a is avail in pool_a
+        // amount_b is avail in pool_b
+        // pool_a & from account shares the same token def
+        // pool_b & to account shares the same token def
+
         // Steps:
         // 1- read price of ETH/USDC in price_feed
         // 2- sub amount to "from" account
         // 3- add amount to "to" account
         // Note: requires some PDA seeds?
 
-        // Step 1: TODO read the price_feed A/B (e.g. ETH/USDC)
-        let amount_eth = 1;
-        let amount_usdt = 10;
+        // Step 1: read the price_feed A/B (e.g. ETH/USDC)
+
+        let data_pf: Vec<u8> = price_feed.account.data.clone().into();
+        let mut state_pf: PriceState = borsh::from_slice(&data_pf).map_err(|e| {
+            SpelError::DeserializationError {
+                account_index: 0,
+                message: e.to_string(),
+            }
+        })?;
+        println!("price state: {:?}", state_pf);
+
+        let amount_a = amount;
+        let amount_b = amount * state_pf.price;
+
+        println!("[swap demo] amount_a: {:?}, amount_b: {:?}", amount_a, amount_b);
+
+        // let amount_a = 1;
+        // let amount_b = 10;
 
         // Step 2: transfer tokens A: "from" -> "pool A"
         // Note: No pda seed are required here ("from" account is the signer)
         //       while "pool A" is owned by this contract
 
-        let instruction_transfer = TokenInstruction::Transfer { amount_to_transfer: amount_eth };
-        let instruction_data_transfer = to_vec(&instruction_transfer).unwrap();
+        let instruction_transfer = TokenInstruction::Transfer { amount_to_transfer: amount_a.into() };
+        let instruction_data_transfer = to_vec(&instruction_transfer).map_err(|err| {
+            SpelError::Custom {
+                code: 20,
+                message: err.to_string(),
+            }
+        })?;
         println!("[swap demo] instruction_data transfer 0: {:?}", instruction_data_transfer);
 
         let chained_call_transfer_1 = ChainedCall {
@@ -232,39 +260,52 @@ mod swap_demo {
             pda_seeds: vec![],
         };
 
-
         // Step 3: transfer tokens B: "pool B" -> "to"
         // Note: a pda seeds is required for "pool B" (bc "pool B" account is owned by this contract
         //       and it must "sign" the transfer)
 
-        let instruction_transfer = TokenInstruction::Transfer { amount_to_transfer: amount_usdt };
-        let instruction_data_transfer = to_vec(&instruction_transfer).unwrap();
+        let instruction_transfer = TokenInstruction::Transfer { amount_to_transfer: amount_b.into() };
+        let instruction_data_transfer = to_vec(&instruction_transfer).map_err(|err| {
+            SpelError::Custom {
+                code: 20,
+                message: err.to_string(),
+            }
+        })?;
         println!("[swap demo] instruction_data transfer: {:?}", instruction_data_transfer);
 
         // TODO / FIXME: need this - check oracle_register contract?
+        let pool_b_authorized = {
+            let mut p = pool_b.clone();
+            p.is_authorized = true;
+            p
+        };
+
+        /*
         let to_authorized = {
             let mut to = to.clone();
             to.is_authorized = true;
             to
         };
+        */
 
         let chained_call_transfer_2 = ChainedCall {
             program_id: token_pg_id,
             pre_states: vec![
                 // Sender
-                pool_b.clone(),
+                // pool_b.clone(),
+                pool_b_authorized,
                 // Recipient
-                to_authorized,
+                // to_authorized,
+                to.clone()
             ],
             instruction_data: instruction_data_transfer,
             pda_seeds: vec![PdaSeed::new(pool_b_pda_seed)],
         };
 
-        Ok(SpelOutput::execute(vec![swap_state, from, to, pool_a, pool_b],
+        Ok(SpelOutput::execute(vec![swap_state, price_feed, from, to, pool_a, pool_b],
                                vec![
                                    chained_call_transfer_1,
-                                   // FIXME
-                                   // chained_call_transfer_2
+                                   chained_call_transfer_2
                                ]))
     }
 
