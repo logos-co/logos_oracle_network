@@ -1,0 +1,8 @@
+target/
+methods/guest/target/
+*.bin
+.swap_demo-state
+.swap_demo-state.tmp
+ui/
+
+.idea

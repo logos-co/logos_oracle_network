@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "swap_demo_core",
+    "swap_demo_ffi",
+    "methods",
+    "examples",
+    "pda_seed_tool",
+]
+exclude = [
+    "methods/guest",
+]
+resolver = "2"

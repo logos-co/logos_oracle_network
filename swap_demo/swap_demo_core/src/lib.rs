@@ -1,6 +1,6 @@
-//use serde::{Deserialize, Serialize};
-
 /*
+use serde::{Deserialize, Serialize};
+
 /// Example state struct — customize for your program.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgramState {
@@ -8,11 +8,8 @@ pub struct ProgramState {
     pub owner: [u8; 32],
 }
 */
+use borsh::{BorshDeserialize, BorshSerialize};
 
-use spel_framework::prelude::*;
-// use borsh::{BorshDeserialize, BorshSerialize};
-
-#[account_type]
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct PriceState {
     pub feed_id: [u8; 32], // asset pair identifier, e.g. hash("BTC/USDT")

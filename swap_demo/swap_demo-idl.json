@@ -1,0 +1,161 @@
+{
+  "version": "0.1.0",
+  "name": "swap_demo",
+  "instructions": [
+    {
+      "name": "initialize",
+      "accounts": [
+        {
+          "name": "swap_state",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": "swap_demo"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "token_program_id",
+          "type": {
+            "array": [
+              "u32",
+              8
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_pool",
+      "accounts": [
+        {
+          "name": "swap_state",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": "swap_demo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_definition_account",
+          "writable": false,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "pool_account",
+          "writable": true,
+          "signer": false,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_pda_seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "swap",
+      "accounts": [
+        {
+          "name": "swap_state",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": "swap_demo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "price_feed",
+          "writable": false,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "from",
+          "writable": false,
+          "signer": true,
+          "init": false
+        },
+        {
+          "name": "to",
+          "writable": true,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "pool_a",
+          "writable": true,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "pool_b",
+          "writable": true,
+          "signer": false,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "pool_b_pda_seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "SwapDemoState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_program_id",
+            "type": {
+              "array": [
+                "u32",
+                8
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

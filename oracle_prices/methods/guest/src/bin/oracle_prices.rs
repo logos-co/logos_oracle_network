@@ -13,21 +13,12 @@ pub struct OraclePricesState {
     feeds: Vec<[u8; 32]>,
 }
 
-#[account_type]
-#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
-pub struct PriceState {
-    feed_id: [u8; 32], // asset pair identifier, e.g. hash("BTC/USDT")
-    price: u64,        // attested median, real value = price * 10^(-decimals)
-    decimals: u32,     // number of decimal places in `price`
-    valid_count: u32,  // number of observations aggregated in this round
-    round: u64,        // round identifier, in Bedrock block-height terms
-    confidence: u64,   // OPTIONAL: dispersion of observations, scaled like `price`
-}
-
 #[lez_program]
 mod oracle_prices {
+
     #[allow(unused_imports)]
     use super::*;
+    use oracle_prices_core::PriceState;
 
     /// Initialize the contract
     #[instruction]
@@ -77,6 +68,8 @@ mod oracle_prices {
             message: e.to_string(),
         })?;
         oracle_prices_account.account.data = bytes.try_into().unwrap();
+
+        println!("AA feed price: {:?}", feed_price);
 
         Ok(SpelOutput::execute(vec![oracle_prices_account, feed_price], vec![]))
     }

@@ -1,0 +1,20 @@
+[package]
+name = "swap_demo-examples"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "generate_idl"
+path = "src/bin/generate_idl.rs"
+
+[[bin]]
+name = "swap_demo_cli"
+path = "src/bin/swap_demo_cli.rs"
+
+[dependencies]
+spel-framework = { git = "https://github.com/logos-co/spel.git", branch = "main" }
+nssa_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", package = "lee_core" }
+spel = { git = "https://github.com/logos-co/spel.git", branch = "main" }
+swap_demo_core = { path = "../swap_demo_core" }
+serde_json = "1.0"
+tokio = { version = "1.28.2", features = ["net", "rt-multi-thread", "sync", "macros"] }
