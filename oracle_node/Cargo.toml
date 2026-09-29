@@ -12,7 +12,8 @@ version    = "0.2.1"
 members  = [
 	"sequencer",
 	"indexer",
-	"common"
+	"common",
+	"e2e_tests"
 ]
 resolver = "2"
 
