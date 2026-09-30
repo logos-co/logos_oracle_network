@@ -12,12 +12,18 @@ version.workspace = true
 [dependencies]
 anyhow.workspace = true
 tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { features = ["env-filter"], version = "0.3.23" }
+# LB
 wallet  = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
-# spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
+spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
 lee = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["test-utils"] }
 common = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
 sequencer_service_rpc = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["client"] }
-tokio = { workspace = true, features = ["full"] }
+# contracts
+oracle_prices_client = { path = "../../oracle_prices_client" }
+
 
 [lints]
 workspace = true
