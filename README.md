@@ -4,7 +4,6 @@
 
 * https://github.com/logos-co/logos-lips/blob/master/docs/anoncomms/raw/logos-oracle-zone.md
 *
-*
 
 
 ## LEZ dev setup
