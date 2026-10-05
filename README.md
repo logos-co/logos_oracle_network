@@ -1,5 +1,11 @@
 # Logos Oracle Network (LON)
 
+## Specs
+
+* https://github.com/logos-co/logos-lips/blob/master/docs/anoncomms/raw/logos-oracle-zone.md
+*
+
+
 ## LEZ dev setup
 
 * Base: Ubuntu 24.04 + rustup + docker

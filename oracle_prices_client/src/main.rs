@@ -10,12 +10,14 @@ use sequencer_service_rpc::RpcClient as _;
 // use spel_framework_core::prelude::AccountId;
 // use borsh::{BorshSerialize, BorshDeserialize};
 use nssa::program::Program;
+use oracle_prices_core::{OraclePricesState, PriceState};
 use spel_framework::account_type;
 use wallet::WalletCore;
 use oracle_prices_client::OraclePricesClient;
 // use serde::{Deserialize, Serialize};
 // use wallet::WalletCore;
 
+/*
 #[account_type]
 #[derive(BorshSerialize, BorshDeserialize, Default, Debug)]
 pub struct OraclePricesState {
@@ -32,6 +34,7 @@ pub struct PriceState {
     round: u64,        // round identifier, in Bedrock block-height terms
     confidence: u64,   // OPTIONAL: dispersion of observations, scaled like `price`
 }
+*/
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
