@@ -112,9 +112,14 @@ impl Default for OracleMerkleTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rs_merkle::{Hasher, MerkleTree};
-    use tiny_keccak::{Hasher as _, Keccak};
+    use rs_merkle::{
+        // Hasher,
+        MerkleTree
+    };
+    use crate::rs_merkle_utils::Keccak256Algorithm;
+    // use tiny_keccak::{Hasher as _, Keccak};
 
+    /*
     #[derive(Clone)]
     pub struct Keccak256Hasher;
 
@@ -129,6 +134,7 @@ mod tests {
             output
         }
     }
+    */
 
     /// Helper function to build a full `rs_merkle` tree padded with zero-leaves
     /// up to capacity 2^DEPTH; return the tree root
@@ -143,7 +149,7 @@ mod tests {
         for (i, leaf) in inserted_leaves.iter().enumerate() {
             full_leaves[i] = *leaf;
         }
-        let reference_tree = MerkleTree::<Keccak256Hasher>::from_leaves(&full_leaves);
+        let reference_tree = MerkleTree::<Keccak256Algorithm>::from_leaves(&full_leaves);
         reference_tree
             .root()
             .expect("Reference tree root calculation failed")
@@ -221,5 +227,4 @@ mod tests {
             }
         }
     }
-
 }
