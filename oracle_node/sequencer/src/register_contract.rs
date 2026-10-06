@@ -1,14 +1,16 @@
+use std::sync::Arc;
+use std::time::Duration;
+// third-party
 use anyhow::{anyhow, Context};
 use sha2::{Sha256, Digest};
 use tracing::{info, debug};
+use rs_merkle::{MerkleTree, algorithms::Keccak256};
+// third-party - LB
 use spel_framework::prelude::{seed_from_str, AccountId, ProgramId, compute_pda_multi, ToSeed};
 use wallet::WalletCore;
 // internal
-use oracle_register_client::{
-    OracleRegisterClient,
-    RegisterAccounts,
-    RegisterState as OracleRegisterState
-};
+use oracle_register_client::{OracleRegisterClient, RegisterAccounts, RegisterState as OracleRegisterState, RegisterState};
+use tokio::sync::RwLock;
 use common::RegisterContractInfo;
 
 pub async fn sequencer_register(
@@ -99,5 +101,55 @@ pub fn vault_pda_seed_bytes(create_key: &[u8; 32]) -> [u8; 32] {
 pub fn compute_vault_pda(program_id: &ProgramId, create_key: &[u8; 32]) -> AccountId {
     let tag = seed_from_str(ORACLE_REGISER_LITERAL);
     compute_pda_multi(program_id, &[&tag as &dyn ToSeed, create_key])
+}
+
+// TODO / FIXME: duplicated code (see indexer)
+pub async fn fetch_oracle_register_state(rc_info: &RegisterContractInfo) -> anyhow::Result<RegisterState> {
+
+    let wallet_core = WalletCore::from_env().context("Getting wallet accounts from env")?;
+    let oracle_register_program_id = ProgramId::from(rc_info.oracle_register_program_id);
+    let client = OracleRegisterClient::new(&wallet_core, oracle_register_program_id);
+
+    // debug!("Fetching oracle register state...");
+    // debug!("client program id: {:?}", client.program_id);
+    let register_state = client
+        .fetch_register::<OracleRegisterState>()
+        .await
+        .map_err(|err| anyhow!("{}", err))?;
+
+    // debug!("register store fetched...");
+
+    Ok(register_state)
+}
+
+pub async fn merkle_tree_poll(rc_info: &RegisterContractInfo, merkle_tree: Arc<RwLock<MerkleTree<Keccak256>>>, poll_interval: Duration) -> anyhow::Result<()> {
+
+    info!("Starting merkle-tree poll...");
+    loop {
+        let register_state = fetch_oracle_register_state(rc_info).await?;
+
+        let current_root = {
+            let lock = merkle_tree.read().await;
+            lock.root()
+        };
+
+        // 2. Only rebuild if the on-chain root changed (or tree is empty)
+        if current_root.is_none() || current_root.unwrap() != register_state.mtree.current_root {
+            let leaves: Vec<[u8; 32]> = register_state.registered
+                .into_iter()
+                .filter(|l| l != &[0u8; 32])
+                .collect();
+
+            let new_tree = MerkleTree::from_leaves(&leaves);
+
+            // 3. Acquire write lock and update the cache
+            let mut write_lock = merkle_tree.write().await;
+            *write_lock = new_tree;
+            debug!("Merkle tree updated with new root!");
+        }
+
+        tokio::time::sleep(poll_interval).await;
+    }
+    Ok(())
 }
 

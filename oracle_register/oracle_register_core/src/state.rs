@@ -28,7 +28,7 @@ impl Default for RegisterState {
 
 impl RegisterState {
 
-    fn insert_oracle(&mut self, leaf: [u8; 32]) -> Result<(), &'static str> {
+    pub fn insert_oracle(&mut self, leaf: [u8; 32]) -> Result<(), &'static str> {
         let registered_index = self.mtree.len();
         self.mtree.insert_oracle(leaf)?;
         self.registered[registered_index] = leaf;
@@ -82,9 +82,5 @@ mod tests {
             reference_tree_mproof.serialize::<proof_serializers::DirectHashesOrder>(),
             proof_2.serialize::<proof_serializers::DirectHashesOrder>()
         );
-
-        // TODO
-        // let mproof_root = reference_tree_mproof.root(&[0, 1], );
     }
-
 }

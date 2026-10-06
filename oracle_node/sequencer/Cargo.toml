@@ -59,6 +59,7 @@ wallet  = { git = "https://github.com/logos-blockchain/logos-execution-zone.git"
 # internal
 common =  { path = "../common" }
 oracle_register_client = { path = "../../oracle_register_client" }
+rs_merkle = { version = "1.5.0", features = ["keccak256"] }
 
 [build-dependencies]
 prost-build = "0.14"
