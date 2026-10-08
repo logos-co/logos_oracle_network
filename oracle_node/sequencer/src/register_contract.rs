@@ -16,7 +16,7 @@ use common::RegisterContractInfo;
 pub async fn sequencer_register(
     rc_info: RegisterContractInfo,
     node_id: &[u8; 32]
-) -> anyhow::Result<()> {
+) -> anyhow::Result<u32> {
     
     let wallet_core = WalletCore::from_env().context("Getting wallet accounts from env")?;
     let oracle_register_program_id = ProgramId::from(rc_info.oracle_register_program_id);
@@ -77,11 +77,20 @@ pub async fn sequencer_register(
         }
 
         info!("Register success!");
+
     } else {
         info!("Already registered, nothing to do...");
     }
 
-    Ok(())
+    info!("Fetching oracle_register to find oracle index...");
+    let register_state = fetch_oracle_register_state(&rc_info).await?;
+    let oracle_node_mtree_index = register_state
+        .registered
+        .iter()
+        .position(|pk| pk == node_id)
+        .ok_or(anyhow!("Could not find oracle node in merkle tree"))?;
+
+    Ok(oracle_node_mtree_index as u32)
 }
 
 const ORACLE_REGISER_LITERAL: &str = "oracle_register__";
@@ -133,7 +142,7 @@ pub async fn merkle_tree_poll(rc_info: &RegisterContractInfo, merkle_tree: Arc<R
             lock.root()
         };
 
-        // 2. Only rebuild if the on-chain root changed (or tree is empty)
+        // Only rebuild if the on-chain root changed (or tree is empty)
         if current_root.is_none() || current_root.unwrap() != register_state.mtree.current_root {
             let leaves: Vec<[u8; 32]> = register_state.registered
                 .into_iter()
@@ -142,10 +151,10 @@ pub async fn merkle_tree_poll(rc_info: &RegisterContractInfo, merkle_tree: Arc<R
 
             let new_tree = MerkleTree::from_leaves(&leaves);
 
-            // 3. Acquire write lock and update the cache
+            // Update the cache
             let mut write_lock = merkle_tree.write().await;
             *write_lock = new_tree;
-            debug!("Merkle tree updated with new root!");
+            info!("Merkle tree updated with new root!");
         }
 
         tokio::time::sleep(poll_interval).await;

@@ -88,7 +88,7 @@ impl Sequencer {
         })
     }
 
-    pub async fn run(&mut self) -> anyhow::Result<()> {
+    pub async fn run(&mut self, oracle_node_index: u32) -> anyhow::Result<()> {
 
         info!("Starting sequencer...");
 
@@ -158,6 +158,7 @@ impl Sequencer {
                         round, // TODO: need Logos RPC doc
                         timestamp: price_latest.timestamp,
                         oracle_id: oracle_channel_keypair.public_key().to_bytes().to_vec(),
+                        oracle_index: oracle_node_index,
                         signature: vec![],
                         membership_proof,
                     };

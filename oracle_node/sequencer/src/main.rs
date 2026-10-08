@@ -104,14 +104,14 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
     let poll_interval = Duration::from_millis(20);
 
     // Register (or check it is already registered) to oracle_register contract
-    let oracle_register_cfg = {
+    let (oracle_register_cfg, oracle_node_index) = {
         let file = fs::File::open(args.register_contract_config.as_path())
             .context(format!("Reading {}", args.register_contract_config.as_path().display()))?;
         let reader = std::io::BufReader::new(file);
         let cfg = serde_json::from_reader::<_, RegisterContractInfo>(reader)?;
         debug!("oracle register cfg: {:?}", cfg);
-        sequencer_register(cfg.clone(), oracle_pubk.as_bytes()).await?;
-        cfg
+        let oracle_node_index = sequencer_register(cfg.clone(), oracle_pubk.as_bytes()).await?;
+        (cfg, oracle_node_index)
     };
 
     let mut set = JoinSet::new();
@@ -177,7 +177,7 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
 
     set.spawn(async move { price_monitor.run(&mut rx).await });
     // FIXME: wait_ready ?
-    set.spawn(async move { sequencer.run().await });
+    set.spawn(async move { sequencer.run(oracle_node_index).await });
 
     while let Some(res) = set.join_next().await {
         match res {
