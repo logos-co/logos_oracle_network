@@ -10,6 +10,9 @@ use url::Url;
 use prost::Message;
 use tracing::{info, debug, error, warn};
 use bytes::Bytes;
+use rs_merkle::algorithms::Keccak256;
+use rs_merkle::{proof_serializers, MerkleTree};
+use tokio::sync::RwLock;
 // third-party - logos
 use logos_blockchain_zone_sdk::{
     adapter::NodeHttpClient,
@@ -40,7 +43,8 @@ pub struct Sequencer {
     pub checkpoint_path: PathBuf,
     price_map: Arc<DashMap<String, VecDeque<PartialPriceObservation>>>,
     price_feed: String,
-    oracle_channel_keypair: Ed25519Key
+    oracle_channel_keypair: Ed25519Key,
+    merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>> 
 }
 
 impl Sequencer {
@@ -54,6 +58,7 @@ impl Sequencer {
         price_feed: String,
         oracle_signing_key: Ed25519Key,
         oracle_channel_id: ChannelId,
+        merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>
     ) -> anyhow::Result<Self> {
 
         let checkpoint = None;
@@ -78,11 +83,12 @@ impl Sequencer {
             checkpoint_path,
             price_map,
             price_feed,
-            oracle_channel_keypair: signing_key
+            oracle_channel_keypair: signing_key,
+            merkle_tree_registered_oracle,
         })
     }
 
-    pub async fn run(&mut self) -> anyhow::Result<()> {
+    pub async fn run(&mut self, oracle_node_index: u32) -> anyhow::Result<()> {
 
         info!("Starting sequencer...");
 
@@ -91,6 +97,7 @@ impl Sequencer {
         let price_map = self.price_map.clone();
         let price_feed = self.price_feed.clone();
         let oracle_channel_keypair = self.oracle_channel_keypair.clone();
+        let merkle_tree = self.merkle_tree_registered_oracle.clone();
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_mins(1));
@@ -133,6 +140,17 @@ impl Sequencer {
 
                 let obs = {
                     round = round.saturating_add(1);
+                    
+                    let membership_proof = {
+                        let lock = merkle_tree
+                                .read()
+                                .await;
+                        // TODO / FIXME: leaf indices
+                        lock
+                            .proof(&[0])
+                            .serialize::<proof_serializers::DirectHashesOrder>()
+                    };
+                    
                     let mut obs = PriceObservation {
                         feed_id: price_latest.feed_id.clone(),
                         price: price_latest.price,
@@ -140,8 +158,9 @@ impl Sequencer {
                         round, // TODO: need Logos RPC doc
                         timestamp: price_latest.timestamp,
                         oracle_id: oracle_channel_keypair.public_key().to_bytes().to_vec(),
+                        oracle_index: oracle_node_index,
                         signature: vec![],
-                        membership_proof: vec![], // TODO: need LEZ register contract
+                        membership_proof,
                     };
 
                     let mut to_hash: Vec<u8> = vec![];

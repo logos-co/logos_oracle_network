@@ -6,7 +6,7 @@ pub struct PricesContractInfo {
     pub oracle_prices_program_id: [u32; 8],
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RegisterContractInfo {
     #[serde(with = "hex_u32_8")]
     pub oracle_register_program_id: [u32; 8],

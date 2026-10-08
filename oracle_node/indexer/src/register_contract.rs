@@ -18,12 +18,14 @@ pub async fn fetch_registered(rc_info: &RegisterContractInfo) -> anyhow::Result<
 
     // debug!("Fetching oracle register state...");
     // debug!("client program id: {:?}", client.program_id);
-    let register_store = client.fetch_register::<OracleRegisterState>().await
+    let register_state = client
+        .fetch_register::<OracleRegisterState>()
+        .await
         .map_err(|err| anyhow!("{}", err))?;
 
     // debug!("register store fetched...");
 
-    Ok(register_store.registered.to_vec())
+    Ok(register_state.registered.to_vec())
 }
 
 

@@ -107,7 +107,7 @@ pub async fn run(args: IndexerArgs) -> anyhow::Result<()> {
     });
     let (watch_channel_ids_tx, watch_channel_ids_rx) = watch::channel(HashSet::new());
     set.spawn(async move {
-            channel_discover(Duration::from_millis(100), watch_channel_ids_tx, oracle_register_cfg).await
+        channel_discover(Duration::from_millis(100), watch_channel_ids_tx, oracle_register_cfg).await
     });
 
     let indexer = match Indexer::new(
