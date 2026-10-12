@@ -2,14 +2,16 @@ mod args;
 mod indexer;
 mod register_contract;
 mod prices_contract;
+mod mtree;
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 use std::time::Duration;
 use anyhow::Context;
 // third-party
 use clap::Parser as _;
 use spel_framework::serde_json;
-use tokio::sync::watch;
+use tokio::sync::{watch, RwLock};
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt as _, util::SubscriberInitExt as _};
@@ -19,6 +21,8 @@ use common::{time_info_poll, RegisterContractInfo, PricesContractInfo};
 use indexer::Indexer;
 use crate::args::IndexerArgs;
 use crate::indexer::channel_discover;
+use crate::mtree::RootsCache;
+use crate::register_contract::merkle_tree_roots_poll;
 
 #[tokio::main]
 async fn main() {
@@ -55,6 +59,10 @@ pub async fn run(args: IndexerArgs) -> anyhow::Result<()> {
         debug!("oracle prices contract cfg: {:?}", cfg);
         cfg
     };
+
+    // merlke tree
+    let roots_cache = RootsCache::default();
+    // end merkle tree
 
     /*
     let (watch_channel_ids_tx, watch_channel_ids_rx) = watch::channel(HashSet::new());
@@ -106,8 +114,13 @@ pub async fn run(args: IndexerArgs) -> anyhow::Result<()> {
         time_info_poll(node_rest_url, Duration::from_millis(100), watch_time_info_tx).await
     });
     let (watch_channel_ids_tx, watch_channel_ids_rx) = watch::channel(HashSet::new());
+    let oracle_register_cfg_2 = oracle_register_cfg.clone();
     set.spawn(async move {
-        channel_discover(Duration::from_millis(100), watch_channel_ids_tx, oracle_register_cfg).await
+        channel_discover(Duration::from_millis(100), watch_channel_ids_tx, &oracle_register_cfg).await
+    });
+
+    set.spawn(async move {
+        merkle_tree_roots_poll(&oracle_register_cfg_2, roots_cache.history.clone(), Duration::from_millis(100)).await
     });
 
     let indexer = match Indexer::new(

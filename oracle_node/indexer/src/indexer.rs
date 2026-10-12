@@ -19,7 +19,7 @@ use logos_blockchain_zone_sdk::indexer::ZoneIndexer;
 use common::{PricesContractInfo, RegisterContractInfo, TimeInfo, PRICE_OBSERVATION_DECIMAL};
 use crate::indexer::lon::{AttestedPrice, PriceObservation};
 use crate::prices_contract::publish_attested_price;
-use crate::register_contract::fetch_registered;
+use crate::register_contract::fetch_oracle_register_state;
 
 pub mod lon {
     include!(concat!(env!("OUT_DIR"), "/lon.rs"));
@@ -241,14 +241,15 @@ async fn channel_worker(
 }
 
 /// Query SC for updated channel ids
-pub async fn channel_discover(poll_interval: Duration, tx: watch::Sender<HashSet<ChannelId>>, rc_info: RegisterContractInfo) -> anyhow::Result<()> {
+pub async fn channel_discover(poll_interval: Duration, tx: watch::Sender<HashSet<ChannelId>>, rc_info: &RegisterContractInfo) -> anyhow::Result<()> {
 
     loop {
-        match fetch_registered(&rc_info).await {
-            Ok(channels_vec) => {
-                // debug!("channels_vec len: {}", channels_vec.len());
-                // debug!("channels_vec: {:?}", channels_vec);
-                let channels_set: HashSet<ChannelId> = channels_vec
+        match fetch_oracle_register_state(&rc_info).await {
+            Ok(state) => {
+                // debug!("channels_vec len: {}", state.registered.len());
+                // debug!("channels_vec: {:?}", state.registered);
+                let channels_set: HashSet<ChannelId> = state
+                    .registered
                     .into_iter()
                     .filter_map(|channel_id|
                         if channel_id != [0; 32] {

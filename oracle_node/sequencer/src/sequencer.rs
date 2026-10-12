@@ -145,9 +145,8 @@ impl Sequencer {
                         let lock = merkle_tree
                                 .read()
                                 .await;
-                        // TODO / FIXME: leaf indices
                         lock
-                            .proof(&[0])
+                            .proof(&[oracle_node_index as usize])
                             .serialize::<proof_serializers::DirectHashesOrder>()
                     };
                     
@@ -170,6 +169,8 @@ impl Sequencer {
                     to_hash.extend(obs.round.to_le_bytes().as_slice());
                     to_hash.extend(obs.timestamp.to_le_bytes().as_slice());
                     to_hash.extend(obs.oracle_id.clone());
+                    // SPECDIF: added the oracle_index field to hash
+                    to_hash.extend(obs.oracle_index.to_le_bytes().as_slice());
                     // SPECDIF: current impl use sequencer.key (ED25519) to sign the PriceObservation
                     //          spec requires to generate a BIP-340 Schnorr sig
                     match oracle_channel_keypair.sign(&Bytes::from(to_hash)) {
