@@ -49,7 +49,7 @@ pub async fn fetch_oracle_register_state(rc_info: &RegisterContractInfo) -> anyh
     Ok(register_state)
 }
 
-pub async fn merkle_tree_roots_poll(rc_info: &RegisterContractInfo, merkle_tree_roots: Arc<RwLock<VecDeque<TreeSnapshot>>> , poll_interval: Duration) -> anyhow::Result<()> {
+pub async fn merkle_tree_roots_poll(rc_info: &RegisterContractInfo, merkle_tree_roots: Arc<RwLock<VecDeque<TreeSnapshot>>>, max_capacity: usize, poll_interval: Duration) -> anyhow::Result<()> {
 
     info!("Starting merkle-tree poll...");
     loop {
@@ -63,6 +63,13 @@ pub async fn merkle_tree_roots_poll(rc_info: &RegisterContractInfo, merkle_tree_
         if last_root.is_none() || last_root.unwrap().root != register_state.mtree.current_root {
 
             let mut write_lock = merkle_tree_roots.write().await;
+
+            if write_lock.len() == max_capacity {
+                // SPEC/FIXME: need to specify how many roots to keep (or when to reset roots)
+                write_lock.pop_front();
+                debug!("Removing Merkle tree root from root cache...");
+            }
+
             write_lock.push_back(TreeSnapshot {
                 root: register_state.mtree.current_root.clone(),
                 total_leaves: register_state.mtree.len(),

@@ -1,14 +1,18 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::collections::hash_map::Entry;
+use std::sync::Arc;
 use std::time::Duration;
 // third-party
 use futures::StreamExt as _;
 use reqwest::Url;
 use tracing::{debug, error, info, warn};
 use prost::Message;
+use rs_merkle::algorithms::Keccak256;
+use rs_merkle::MerkleProof;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
+use tokio::sync::RwLock;
 use sha2::{Digest, Sha256};
 // third-party - logos
 use lb_common_http_client::{BasicAuthCredentials, CommonHttpClient};
@@ -18,6 +22,7 @@ use logos_blockchain_zone_sdk::indexer::ZoneIndexer;
 // internal
 use common::{PricesContractInfo, RegisterContractInfo, TimeInfo, PRICE_OBSERVATION_DECIMAL};
 use crate::indexer::lon::{AttestedPrice, PriceObservation};
+use crate::mtree::TreeSnapshot;
 use crate::prices_contract::publish_attested_price;
 use crate::register_contract::fetch_oracle_register_state;
 
@@ -34,6 +39,7 @@ pub struct Indexer {
     active_workers: HashMap<ChannelId, JoinHandle<()>>,
     feed_workers: HashMap<String, mpsc::Sender<(ChannelId, PriceObservation)>>,
     pc_info: PricesContractInfo,
+    merkle_tree_roots: Arc<RwLock<VecDeque<TreeSnapshot>>>,
 }
 
 impl Indexer {
@@ -45,6 +51,7 @@ impl Indexer {
         time_rx: watch::Receiver<Option<TimeInfo>>,
         channels_rx: watch::Receiver<HashSet<ChannelId>>,
         pc_info: PricesContractInfo,
+        merkle_tree_roots: Arc<RwLock<VecDeque<TreeSnapshot>>>,
     ) -> anyhow::Result<Self> {
         let node_url = Url::parse(node_endpoint)?;
         Ok(Self {
@@ -56,7 +63,8 @@ impl Indexer {
             active_workers: HashMap::new(),
             // TODO: maybe create feed workers for some known price id
             feed_workers: HashMap::new(),
-            pc_info
+            pc_info,
+            merkle_tree_roots
         })
     }
 
@@ -142,8 +150,9 @@ impl Indexer {
                             let cfg = PriceFeedWorkerConfig {
                                 feed_id, round_length: 2, quorum_threshold: 1 };
                             let pc_info = self.pc_info.clone();
+                            let merkle_tree_roots = self.merkle_tree_roots.clone();
                             let _worker_handle = tokio::spawn(async move {
-                                price_feed_worker(cfg, channels_rx, worker_rx, time_info_rx, pc_info).await
+                                price_feed_worker(cfg, channels_rx, worker_rx, time_info_rx, pc_info, merkle_tree_roots).await
                             });
                             entry.insert(worker_tx.clone());
                             worker_tx
@@ -162,8 +171,9 @@ impl Indexer {
                         let cfg = PriceFeedWorkerConfig {
                             feed_id, round_length: 2, quorum_threshold: 1 };
                         let pc_info = self.pc_info.clone();
+                        let merkle_tree_roots = self.merkle_tree_roots.clone();
                         let _worker_handle = tokio::spawn(async move {
-                            price_feed_worker(cfg, channels_rx, worker_rx, time_info_rx, pc_info).await
+                            price_feed_worker(cfg, channels_rx, worker_rx, time_info_rx, pc_info, merkle_tree_roots).await
                         });
                         self.feed_workers.insert(price_obs.feed_id.clone(), tx.clone());
                         // Retry on the send on the newly created feed_worker
@@ -286,6 +296,7 @@ async fn price_feed_worker(
     mut price_obs_rx: mpsc::Receiver<(ChannelId, PriceObservation)>,
     mut time_rx: watch::Receiver<Option<TimeInfo>>,
     pc_info: PricesContractInfo,
+    roots: Arc<RwLock<VecDeque<TreeSnapshot>>>
 ) {
     info!("Started feed worker for {}", cfg.feed_id);
 
@@ -379,9 +390,9 @@ async fn price_feed_worker(
             // Wait for a message, but timeout if idle too long
             msg = timeout(idle_timeout, price_obs_rx.recv()) => {
                 match msg {
-                    Ok(Some((channel_id, obs))) => {
+                    Ok(Some((channel_id, p_obs))) => {
 
-                        info!("[Feed {}] 0 processing valid observation: {}", cfg.feed_id, obs.price);
+                        info!("[Feed {}] 0 processing valid observation: {}", cfg.feed_id, p_obs.price);
 
                         // FILTER: Ensure the channel is STILL active.
                         // This prevents processing messages that were buffered in the channel
@@ -391,8 +402,52 @@ async fn price_feed_worker(
                             continue;
                         }
 
-                        info!("[Feed {}] processing valid observation: {}", cfg.feed_id, obs.price);
-                        current_round_observations.push(obs);
+                        //
+
+                        if !verify_signature(&p_obs, channel_id.as_ref()) {
+                            warn!(oracle = ?p_obs.oracle_id, "Invalid signature on observation. Dropping it...");
+                            continue;
+                        }
+
+                        // Check Merkle proof against historical roots
+                        let is_member = {
+                            let proof = MerkleProof::<Keccak256>::try_from(
+                                p_obs.membership_proof.clone());
+
+                            if let Err(e) = proof {
+                                warn!("Cannot build merkle proof from price obs proof field, Dropping it...");
+                                continue;
+                            }
+                            let proof = proof.unwrap();
+
+                            let roots = roots
+                                .read()
+                                .await;
+
+                            // Verify the proof against ANY root in our recent history
+                            roots
+                                .iter()
+                                .rev() // From newest to oldest
+                                .any(|snapshot| {
+                                    proof
+                                        .verify(
+                                            snapshot.root,
+                                            &[p_obs.oracle_index as usize],
+                                            &[*channel_id.as_ref()], // channel_id == the sequencer pubk
+                                            snapshot.total_leaves,
+                                        )
+                                })
+                        };
+
+                        if !is_member {
+                            warn!(oracle = ?p_obs.oracle_id, "Invalid Merkle membership proof. Dropping it...");
+                            continue;
+                        }
+
+                        //
+
+                        info!("[Feed {}] processing valid observation: {}", cfg.feed_id, p_obs.price);
+                        current_round_observations.push(p_obs);
                     }
                     Ok(None) => {
                         warn!("Main indexer loop dropped the sender, time to exit...");
@@ -429,3 +484,37 @@ fn compute_median(mut prices: Vec<i64>) -> i64 {
     }
 }
 
+use lb_key_management_system_service::keys::{Ed25519PublicKey, Ed25519Signature};
+
+// TODO: Create unit test in sequencer to use this function
+fn verify_signature(p_obs: &PriceObservation, pubk_bytes: &[u8; 32]) -> bool {
+
+    // let pubk_arr_: Result<&[u8; 32], _> = pubk_bytes.as_slice().try_into();
+    let sig_arr_: Result<&[u8; 64], _> = p_obs.signature.as_slice().try_into();
+
+    let message = {
+        let mut to_hash: Vec<u8> = vec![];
+        to_hash.extend(p_obs.feed_id.as_bytes());
+        to_hash.extend(p_obs.price.to_le_bytes().as_slice());
+        to_hash.extend(p_obs.decimals.to_le_bytes().as_slice());
+        to_hash.extend(p_obs.round.to_le_bytes().as_slice());
+        to_hash.extend(p_obs.timestamp.to_le_bytes().as_slice());
+        to_hash.extend(p_obs.oracle_id.clone());
+        // SPECDIF: added the oracle_index field to hash
+        to_hash.extend(p_obs.oracle_index.to_le_bytes().as_slice());
+        to_hash
+    };
+
+    if let Ok(sig_arr) = sig_arr_ {
+        if let Ok(pubk) = Ed25519PublicKey::from_bytes(pubk_bytes) {
+            let sig = Ed25519Signature::from_bytes(sig_arr);
+            return pubk.verify(message.as_slice(), &sig).is_ok();
+        } else {
+            debug!("Cannot build pubkey");
+        }
+    } else {
+        debug!("Cannot parse pubkey bytes or signature bytes");
+    }
+
+    false
+}

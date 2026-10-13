@@ -40,9 +40,11 @@ prost = "0.14.4" # grpc
 lb-common-http-client = { workspace = true }
 lb-core = { workspace = true }
 logos-blockchain-zone-sdk = { path = "../logos-blockchain/zone-sdk" }
+lb-key-management-system-service = { workspace = true }
 # contract
 spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
 wallet = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
+rs_merkle = { version = "1.5.0", features = ["keccak256"] }
 
 [build-dependencies]
 prost-build = "0.14.4"

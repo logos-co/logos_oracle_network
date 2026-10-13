@@ -24,6 +24,8 @@ use crate::indexer::channel_discover;
 use crate::mtree::RootsCache;
 use crate::register_contract::merkle_tree_roots_poll;
 
+const MAX_ROOTS_TO_KEEP: usize = 10;
+
 #[tokio::main]
 async fn main() {
     let args = IndexerArgs::parse();
@@ -61,7 +63,11 @@ pub async fn run(args: IndexerArgs) -> anyhow::Result<()> {
     };
 
     // merlke tree
-    let roots_cache = RootsCache::default();
+    let roots_cache = {
+        let mut r = RootsCache::default();
+        r.max_capacity = MAX_ROOTS_TO_KEEP;
+        r
+    };
     // end merkle tree
 
     /*
@@ -119,8 +125,9 @@ pub async fn run(args: IndexerArgs) -> anyhow::Result<()> {
         channel_discover(Duration::from_millis(100), watch_channel_ids_tx, &oracle_register_cfg).await
     });
 
+    let merkle_tree_roots = roots_cache.history.clone();
     set.spawn(async move {
-        merkle_tree_roots_poll(&oracle_register_cfg_2, roots_cache.history.clone(), Duration::from_millis(100)).await
+        merkle_tree_roots_poll(&oracle_register_cfg_2, merkle_tree_roots, roots_cache.max_capacity, Duration::from_millis(100)).await
     });
 
     let indexer = match Indexer::new(
@@ -130,6 +137,7 @@ pub async fn run(args: IndexerArgs) -> anyhow::Result<()> {
         watch_time_info_rx.clone(),
         watch_channel_ids_rx.clone(),
         oracle_prices_cfg,
+        roots_cache.history.clone(),
     ) {
         Ok(i) => i,
         Err(e) => {
