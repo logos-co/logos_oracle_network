@@ -57,6 +57,7 @@ const LON_STAKE_AMOUNT: u128 = 3;
 
 #[lez_program]
 mod oracle_register {
+    use nssa_core::account::data::DataTooBigError;
     // use core::panic::PanicMessage;
     #[allow(unused_imports)]
     use super::*;
@@ -108,7 +109,7 @@ mod oracle_register {
         pda_seed: [u8; 32],
     ) -> SpelResult {
 
-        println!("[print] register instruction AA");
+        println!("[print] register instruction AB");
         eprintln!("[eprint] register");
         println!("oracle register pg id: {:?}", register.account.program_owner);
 
@@ -136,7 +137,7 @@ mod oracle_register {
         */
 
         // let pk = [47u8; 32];
-        state.mtree.insert_oracle(oracle_key).map_err(|e| SpelError::Custom { code: 0, message: e.to_string() })?;
+        state.insert_oracle(oracle_key).map_err(|e| SpelError::Custom { code: 0, message: e.to_string() })?;
         let registered_idx = state.mtree.next_index.saturating_sub(1) as usize;
         println!("registered_idx: {}", registered_idx);
         state.registered[registered_idx] = oracle_key;
@@ -148,7 +149,9 @@ mod oracle_register {
             message: e.to_string(),
         })?;
         println!("bytes len: {}", bytes.len());
-        register.account.data = bytes.try_into().unwrap();
+        register.account.data = bytes
+            .try_into()
+            .map_err(|e: DataTooBigError| SpelError::Custom { code: 1, message: e.to_string() })?;
 
         // let token_pg_id = ProgramId::from([4266428645, 517024648, 1369049673, 1626402537, 3398049368, 2898630437, 1705650675, 3326128479]);
         let token_pg_id = ProgramId::from(state.token_program_id);
@@ -158,7 +161,7 @@ mod oracle_register {
         // let instruction_data_init = to_vec(&instruction_init).unwrap();
         let instruction_data_init = to_vec(
             &TokenInstruction::InitializeAccount
-        ).unwrap();
+        ).map_err(|e| SpelError::Custom { code: 20, message: e.to_string() })?;
 
         println!("instruction_data_init: {:?}", instruction_data_init);
         println!("token def account pg id: {:?}", token_def_account.account.program_owner);
@@ -214,7 +217,8 @@ mod oracle_register {
 
         // let instruction_data: InstructionData = vec![];
         let instruction_transfer = TokenInstruction::Transfer { amount_to_transfer: LON_STAKE_AMOUNT };
-        let instruction_data_transfer = to_vec(&instruction_transfer).unwrap();
+        let instruction_data_transfer = to_vec(&instruction_transfer)
+            .map_err(|e| SpelError::Custom { code: 21, message: e.to_string() })?;
         println!("AAC instruction_data transfer: {:?}", instruction_data_transfer);
 
         /*

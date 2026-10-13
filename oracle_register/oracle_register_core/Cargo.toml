@@ -8,6 +8,7 @@ serde = { version = "1.0", features = ["derive"] }
 borsh = { version = "1.5", features = ["derive"] }
 tiny-keccak = { version = "2.0.2", features = ["keccak"] }
 spel-framework-macros = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0", package = "spel-framework-macros" }
+rs_merkle = "1.4"
 
 [dev-dependencies]
-rs_merkle = "1.4"
+# rs_merkle = "1.4"

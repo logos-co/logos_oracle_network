@@ -25,6 +25,7 @@ use dashmap::DashMap;
 use rand::Rng;
 use tokio::task::JoinSet;
 use serde::Deserialize;
+use tokio::sync::RwLock;
 use tracing::{
     info,
     debug,
@@ -37,7 +38,7 @@ use url::Url;
 // internal
 use crate::args::SequencerArgs;
 use crate::monitor::PriceMonitor;
-use crate::register_contract::sequencer_register;
+use crate::register_contract::{sequencer_register, merkle_tree_poll};
 use common::{time_info_poll, RegisterContractInfo};
 use lb_core::mantle::ops::channel::ChannelId;
 use lb_key_management_system_service::keys::{Ed25519Key, ED25519_SECRET_KEY_SIZE};
@@ -76,6 +77,9 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
 
     let price_map = Arc::new(DashMap::new());
 
+    // merkle tree
+    let merkle_tree = Arc::new(RwLock::new(Default::default()));
+
     let mut sequencer = Sequencer::new(
         &args.node_rest_url,
         args.node_auth_username,
@@ -85,7 +89,7 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
         price_feed_normalized.to_string(),
         oracle_keypair,
         ChannelId::from(oracle_pubk.to_bytes()),
-
+        merkle_tree.clone()
     )
         .context("Failed to initialize sequencer")?;
 
@@ -100,17 +104,24 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
     let poll_interval = Duration::from_millis(20);
 
     // Register (or check it is already registered) to oracle_register contract
-    {
+    let (oracle_register_cfg, oracle_node_index) = {
         let file = fs::File::open(args.register_contract_config.as_path())
             .context(format!("Reading {}", args.register_contract_config.as_path().display()))?;
         let reader = std::io::BufReader::new(file);
         let cfg = serde_json::from_reader::<_, RegisterContractInfo>(reader)?;
         debug!("oracle register cfg: {:?}", cfg);
-        sequencer_register(cfg, oracle_pubk.as_bytes()).await?;
-    }
+        let oracle_node_index = sequencer_register(cfg.clone(), oracle_pubk.as_bytes()).await?;
+        (cfg, oracle_node_index)
+    };
 
     let mut set = JoinSet::new();
-    set.spawn(async move { time_info_poll( args.node_rest_url.clone(), poll_interval, time_info_tx).await } );
+    set.spawn(async move {
+        time_info_poll( args.node_rest_url.clone(), poll_interval, time_info_tx).await
+    });
+
+    set.spawn(async move {
+        merkle_tree_poll(&oracle_register_cfg, merkle_tree, poll_interval).await
+    });
 
     // SPECDIF: only 1 price source - spec requires at least 3 sources
     match provider {
@@ -166,7 +177,7 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
 
     set.spawn(async move { price_monitor.run(&mut rx).await });
     // FIXME: wait_ready ?
-    set.spawn(async move { sequencer.run().await });
+    set.spawn(async move { sequencer.run(oracle_node_index).await });
 
     while let Some(res) = set.join_next().await {
         match res {

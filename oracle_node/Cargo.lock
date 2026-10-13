@@ -3305,12 +3305,14 @@ dependencies = [
  "hex",
  "logos-blockchain-common-http-client 0.2.1",
  "logos-blockchain-core 0.2.1",
+ "logos-blockchain-key-management-system-service",
  "logos-blockchain-zone-sdk",
  "oracle_prices_client",
  "oracle_register_client",
  "prost 0.14.4",
  "prost-build",
  "reqwest",
+ "rs_merkle",
  "sha2 0.11.0",
  "spel-framework",
  "tokio",
@@ -6580,6 +6582,7 @@ name = "oracle_register_core"
 version = "0.1.0"
 dependencies = [
  "borsh 1.8.0",
+ "rs_merkle",
  "serde",
  "spel-framework-macros",
  "tiny-keccak",
@@ -8037,6 +8040,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs_merkle"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb09b49230ba22e8c676e7b75dfe2887dea8121f18b530ae0ba519ce442d2b21"
+dependencies = [
+ "sha2 0.10.9",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "rsa"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8496,6 +8509,7 @@ dependencies = [
  "rand 0.8.7",
  "reqwest",
  "reqwest-eventsource",
+ "rs_merkle",
  "secp256k1",
  "serde",
  "serde_json",
