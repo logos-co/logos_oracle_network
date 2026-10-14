@@ -6,6 +6,8 @@ mod args;
 mod register_contract;
 mod binance_fetch;
 mod redstone_fetch;
+mod coinbase_fetch;
+mod uniswap_fetch;
 
 pub mod lon {
     include!(concat!(env!("OUT_DIR"), "/lon.rs"));

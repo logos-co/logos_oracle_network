@@ -5,14 +5,19 @@ use anyhow::anyhow;
 use pyth_sdk::Price;
 use rust_decimal::prelude::FromPrimitive;
 // internal
-use crate::{BinancePriceEvent, RedstonePriceEvent, HermesPriceEvent};
+use crate::{BinancePriceEvent, RedstonePriceEvent, HermesPriceEvent, CoinbaseTickerMsg};
 
 pub const PRICE_OBSERVATION_DECIMAL: u32 = 6;
 const PRICE_OBSERVATION_DECIMAL_PYTH: i32 = - (PRICE_OBSERVATION_DECIMAL as i32);
 
+pub const PROVIDER_BINANCE: &str = "binance";
+pub const PROVIDER_REDSTONE: &str = "redstone";
+pub const PROVIDER_PYTH: &str = "pyth";
+
 #[derive(Debug, Clone)]
 pub struct PartialPriceObservation {
     pub feed_id: String,
+    pub provider: String,
     pub feed_id_provider: String,
     pub price: i64,
     pub decimals: u32,
@@ -28,6 +33,7 @@ impl TryFrom<(String, BinancePriceEvent)> for PartialPriceObservation {
         let scaled_i64 = decimal.mantissa() as i64;
         Ok(Self {
             feed_id: feed_id_normalized,
+            provider: PROVIDER_BINANCE.to_string(),
             feed_id_provider: event.symbol,
             price: scaled_i64,
             decimals: PRICE_OBSERVATION_DECIMAL,
@@ -47,6 +53,7 @@ impl TryFrom<(String, RedstonePriceEvent)> for PartialPriceObservation {
         let scaled_i64 = decimal.mantissa() as i64;
         Ok(Self {
             feed_id: feed_id_normalized,
+            provider: PROVIDER_REDSTONE.to_string(),
             feed_id_provider: event.symbol,
             price: scaled_i64,
             decimals: PRICE_OBSERVATION_DECIMAL,
@@ -78,10 +85,18 @@ impl TryFrom<(String, HermesPriceEvent)> for PartialPriceObservation {
 
         Ok(Self {
             feed_id: feed_id_normalized,
+            provider: PROVIDER_PYTH.to_string(),
             feed_id_provider: price_latest.id,
             price: scaled_pyth_price.price,
             decimals: PRICE_OBSERVATION_DECIMAL,
             timestamp: price_latest.price.publish_time,
         })
+    }
+}
+
+impl TryFrom<(String, CoinbaseTickerMsg)> for PartialPriceObservation {
+    type Error = anyhow::Error;
+    fn try_from((feed_id_normalized, event): (String, CoinbaseTickerMsg)) -> Result<Self, Self::Error> {
+        todo!()
     }
 }

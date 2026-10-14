@@ -55,6 +55,8 @@ secp256k1 = { version = "0.29", features = ["rand", "hashes"] } # BIP-340 x-only
 spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
 # spel = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
 wallet  = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
+# uniswap
+alloy = { version = "0.3", features = ["full"] }
 
 # internal
 common =  { path = "../common" }
