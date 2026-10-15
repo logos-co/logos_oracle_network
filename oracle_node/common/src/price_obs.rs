@@ -4,8 +4,9 @@ use rust_decimal::Decimal;
 use anyhow::anyhow;
 use pyth_sdk::Price;
 use rust_decimal::prelude::FromPrimitive;
+use chrono::DateTime;
 // internal
-use crate::{BinancePriceEvent, RedstonePriceEvent, HermesPriceEvent, CoinbaseTickerMsg};
+use crate::{BinancePriceEvent, RedstonePriceEvent, HermesPriceEvent, CoinbaseMessage, CoinbaseData};
 
 pub const PRICE_OBSERVATION_DECIMAL: u32 = 6;
 const PRICE_OBSERVATION_DECIMAL_PYTH: i32 = - (PRICE_OBSERVATION_DECIMAL as i32);
@@ -13,6 +14,7 @@ const PRICE_OBSERVATION_DECIMAL_PYTH: i32 = - (PRICE_OBSERVATION_DECIMAL as i32)
 pub const PROVIDER_BINANCE: &str = "binance";
 pub const PROVIDER_REDSTONE: &str = "redstone";
 pub const PROVIDER_PYTH: &str = "pyth";
+pub const PROVIDER_COINBASE: &str = "coinbase";
 
 #[derive(Debug, Clone)]
 pub struct PartialPriceObservation {
@@ -94,9 +96,17 @@ impl TryFrom<(String, HermesPriceEvent)> for PartialPriceObservation {
     }
 }
 
-impl TryFrom<(String, CoinbaseTickerMsg)> for PartialPriceObservation {
+impl TryFrom<(String, CoinbaseData)> for PartialPriceObservation {
     type Error = anyhow::Error;
-    fn try_from((feed_id_normalized, event): (String, CoinbaseTickerMsg)) -> Result<Self, Self::Error> {
-        todo!()
+    fn try_from((feed_id_normalized, data): (String, CoinbaseData)) -> Result<Self, Self::Error> {
+
+        Ok(Self {
+            feed_id: feed_id_normalized,
+            provider: PROVIDER_COINBASE.to_string(),
+            feed_id_provider: data.feed_id,
+            price: data.price,
+            decimals: PRICE_OBSERVATION_DECIMAL,
+            timestamp: data.timestamp,
+        })
     }
 }

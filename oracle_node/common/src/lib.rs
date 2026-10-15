@@ -17,4 +17,4 @@ pub use contract::{
     RegisterContractInfo,
     PricesContractInfo
 };
-pub use coinbase::CoinbaseTickerMsg;
+pub use coinbase::{CoinbaseMessage, CoinbaseEvent, CoinbaseTicker, CoinbaseData};
