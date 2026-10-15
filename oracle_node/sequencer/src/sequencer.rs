@@ -33,15 +33,16 @@ use lb_key_management_system_service::{
 };
 // internal
 use crate::zone_state::InMemoryZoneState;
-use common::PartialPriceObservation;
+use common::{PartialPriceObservation, PROVIDER_BINANCE};
 use crate::lon::PriceObservation;
+use crate::monitor::FeedKey;
 
 pub struct Sequencer {
     sequencer: ZoneSequencer<NodeHttpClient>,
     client: SequencerClient,
     state: InMemoryZoneState,
     pub checkpoint_path: PathBuf,
-    price_map: Arc<DashMap<String, VecDeque<PartialPriceObservation>>>,
+    price_map: Arc<DashMap<FeedKey, VecDeque<PartialPriceObservation>>>,
     price_feed: String,
     oracle_channel_keypair: Ed25519Key,
     merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>> 
@@ -54,7 +55,7 @@ impl Sequencer {
         node_auth_username: Option<String>,
         node_auth_password: Option<String>,
         checkpoint_path: PathBuf,
-        price_map: Arc<DashMap<String, VecDeque<PartialPriceObservation>>>,
+        price_map: Arc<DashMap<FeedKey, VecDeque<PartialPriceObservation>>>,
         price_feed: String,
         oracle_signing_key: Ed25519Key,
         oracle_channel_id: ChannelId,
@@ -125,7 +126,11 @@ impl Sequencer {
             loop {
 
                 // take prices from price_map
-                let prices = if let Some(mut price_feed_ref_mut) = price_map.get_mut(&price_feed) {
+                let key = FeedKey {
+                    feed_id: price_feed.clone(),
+                    provider: PROVIDER_BINANCE.to_string(),
+                };
+                let prices = if let Some(mut price_feed_ref_mut) = price_map.get_mut(&key) {
                     std::mem::take(price_feed_ref_mut.value_mut())
                 } else {
                     continue

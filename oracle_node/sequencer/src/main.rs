@@ -6,6 +6,8 @@ mod args;
 mod register_contract;
 mod binance_fetch;
 mod redstone_fetch;
+mod coinbase_fetch;
+mod uniswap_fetch;
 
 pub mod lon {
     include!(concat!(env!("OUT_DIR"), "/lon.rs"));
@@ -54,6 +56,7 @@ async fn main() {
 pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
 
     setup_tracing();
+    let _ = rustls::crypto::ring::default_provider().install_default();
 
     info!("Starting oracle node sequencer...");
     debug!("args: {:?}", &args);
@@ -110,8 +113,9 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
         let reader = std::io::BufReader::new(file);
         let cfg = serde_json::from_reader::<_, RegisterContractInfo>(reader)?;
         debug!("oracle register cfg: {:?}", cfg);
-        let oracle_node_index = sequencer_register(cfg.clone(), oracle_pubk.as_bytes()).await?;
-        (cfg, oracle_node_index)
+        // let oracle_node_index = sequencer_register(cfg.clone(), oracle_pubk.as_bytes()).await?;
+        // (cfg, oracle_node_index)
+        (cfg, 0)
     };
 
     let mut set = JoinSet::new();
@@ -159,11 +163,22 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
             }
             
             let url_str = format!("{}?ids[]={}", price_feed_url, price_feed_provider);
-            let url = Url::parse(&url_str).context("Failed to parse Python SSE URL")?;
+            let url = Url::parse(&url_str).context("Failed to parse Pyth SSE URL")?;
             set.spawn(async move {
                 pyth_fetch::fetch_price(
                     url,
                     args.pyth_bearer.unwrap().as_str(),
+                    price_feed_provider.as_str(),
+                    price_feed_normalized,
+                    tx
+                ).await
+            });
+        },
+        "coinbase" => {
+            let url = Url::parse(price_feed_url).context("Failed to parse Coinbase wss url")?;
+            set.spawn(async move {
+                coinbase_fetch::fetch_price(
+                    url,
                     price_feed_provider.as_str(),
                     price_feed_normalized,
                     tx
@@ -175,9 +190,9 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
         }
     }
 
-    set.spawn(async move { price_monitor.run(&mut rx).await });
-    // FIXME: wait_ready ?
-    set.spawn(async move { sequencer.run(oracle_node_index).await });
+    // set.spawn(async move { price_monitor.run(&mut rx).await });
+    // // FIXME: wait_ready ?
+    // set.spawn(async move { sequencer.run(oracle_node_index).await });
 
     while let Some(res) = set.join_next().await {
         match res {
