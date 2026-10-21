@@ -3,7 +3,8 @@
     "pyth": "https://pyth.dourolabs.app/hermes/v2/updates/price/stream",
     "redstone": "https://api.redstone.finance/prices",
     "binance": "wss://stream.binance.com:9443/ws",
-    "coinbase": "wss://advanced-trade-ws.coinbase.com"
+    "coinbase": "wss://advanced-trade-ws.coinbase.com",
+    "uniswap": "__COMMAND_LINE__"
   },
   "feeds": {
       "BTC/USD": {
@@ -22,7 +23,8 @@
         "pyth": "f2f8317e3bd7d4afb5a613030cdcae7e4196c3cf46d440317b0c0fa18316e749",
         "binance": "ethusdc",
         "redstone": "",
-        "coinbase": "ETH-USDC"
+        "coinbase": "ETH-USDC",
+        "uniswap": "weth/usdc"
       }
   }
 }

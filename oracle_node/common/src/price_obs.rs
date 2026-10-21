@@ -6,15 +6,16 @@ use pyth_sdk::Price;
 use rust_decimal::prelude::FromPrimitive;
 use chrono::DateTime;
 // internal
-use crate::{BinancePriceEvent, RedstonePriceEvent, HermesPriceEvent, CoinbaseMessage, CoinbaseData};
+use crate::{BinancePriceEvent, RedstonePriceEvent, HermesPriceEvent, CoinbaseMessage, CoinbaseData, UniswapData};
 
 pub const PRICE_OBSERVATION_DECIMAL: u32 = 6;
-const PRICE_OBSERVATION_DECIMAL_PYTH: i32 = - (PRICE_OBSERVATION_DECIMAL as i32);
+const PRICE_OBSERVATION_DECIMAL_I32: i32 = - (PRICE_OBSERVATION_DECIMAL as i32);
 
 pub const PROVIDER_BINANCE: &str = "binance";
 pub const PROVIDER_REDSTONE: &str = "redstone";
 pub const PROVIDER_PYTH: &str = "pyth";
 pub const PROVIDER_COINBASE: &str = "coinbase";
+pub const PROVIDER_UNISWAP: &str = "uniswap";
 
 #[derive(Debug, Clone)]
 pub struct PartialPriceObservation {
@@ -82,7 +83,7 @@ impl TryFrom<(String, HermesPriceEvent)> for PartialPriceObservation {
             expo: price_latest.price.expo,
             publish_time: price_latest.price.publish_time,
         }
-            .scale_to_exponent(PRICE_OBSERVATION_DECIMAL_PYTH)
+            .scale_to_exponent(PRICE_OBSERVATION_DECIMAL_I32)
             .ok_or(anyhow!("Failed to scale_to_exponent for price"))?;
 
         Ok(Self {
@@ -105,6 +106,46 @@ impl TryFrom<(String, CoinbaseData)> for PartialPriceObservation {
             provider: PROVIDER_COINBASE.to_string(),
             feed_id_provider: data.feed_id,
             price: data.price,
+            decimals: PRICE_OBSERVATION_DECIMAL,
+            timestamp: data.timestamp,
+        })
+    }
+}
+
+// ~= const TWO_POW_96: f64 = 2.0_f64.powi(96);
+const TWO_POW_96: f64 = 79_228_162_514_264_337_593_543_950_336.0;
+// ~= const PRICE_OBSERVATION_10_POWI_DECIMAL = 10_f64.powi(PRICE_OBSERVATION_DECIMAL_I32);
+const PRICE_OBSERVATION_10_POWI_DECIMAL: f64 = 1_000_000.0;
+
+impl TryFrom<(String, UniswapData)> for PartialPriceObservation {
+    type Error = anyhow::Error;
+
+    fn try_from((feed_id_normalized, data): (String, UniswapData)) -> Result<Self, Self::Error> {
+
+        // Uniswap Math
+        let price_ratio = data.price / TWO_POW_96;
+        let raw_price = price_ratio * price_ratio;
+
+        // Decimal Adjustment
+        let decimal_diff = (data.token_1_decimals as i32) - (data.token_0_decimals as i32);
+        let decimal_adjustment = 10_f64.powi(decimal_diff);
+        let price_token0_in_token1 = raw_price / decimal_adjustment;
+
+        // Invert if necessary
+        let final_price_f64 = if data.is_base_token_0 {
+            price_token0_in_token1
+        } else {
+            1.0 / price_token0_in_token1
+        };
+
+        // Scale to target decimals and round half-up
+        let price_final = (final_price_f64 * PRICE_OBSERVATION_10_POWI_DECIMAL).round() as i64;
+
+        Ok(Self {
+            feed_id: feed_id_normalized,
+            provider: PROVIDER_UNISWAP.to_string(),
+            feed_id_provider: data.feed_id,
+            price: price_final,
             decimals: PRICE_OBSERVATION_DECIMAL,
             timestamp: data.timestamp,
         })

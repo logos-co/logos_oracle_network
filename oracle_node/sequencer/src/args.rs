@@ -72,4 +72,11 @@ pub struct SequencerArgs {
     
     #[arg(long, default_value = "resources/register_contract_config.json")]
     pub register_contract_config: PathBuf,
+
+    #[arg(long, default_value = "resources/uniswap_config.toml")]
+    pub uniswap_config: Option<PathBuf>,
+
+    /// The ETHEREUM RPC URL (Alchemy?) for Uniswap data (can be passed via CLI or ENV)
+    #[arg(long, env = "ETHEREUM_RPC_URL", hide_env_values = true)]
+    pub ethereum_rpc_url: Option<String>,
 }

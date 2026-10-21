@@ -34,7 +34,7 @@ tracing-subscriber = { features = ["env-filter"], version = "0.3.23" }
 sha2 = { version = "0.11.0" }
 hex = { workspace = true }
 bytes = { workspace = true }
-chrono = { workspace = true }
+chrono = { workspace = true, features = ["now"] }
 # lb deps
 lb-common-http-client = { workspace = true }
 lb-core = { workspace = true }
@@ -58,12 +58,14 @@ spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" 
 # spel = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
 wallet  = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
 # uniswap
-alloy = { version = "2.5.0", features = ["full"] }
+alloy = { version = "2.5.0", features = ["full", "sol-types"] }
 
 # internal
 common =  { path = "../common" }
 oracle_register_client = { path = "../../oracle_register_client" }
 rs_merkle = { version = "1.5.0", features = ["keccak256"] }
+toml = "1.1.8"
+dotenvy = "0.15.7"
 
 [build-dependencies]
 prost-build = "0.14"

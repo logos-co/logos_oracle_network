@@ -8,6 +8,8 @@ mod binance_fetch;
 mod redstone_fetch;
 mod coinbase_fetch;
 mod uniswap_fetch;
+mod config;
+mod test_utils;
 
 pub mod lon {
     include!(concat!(env!("OUT_DIR"), "/lon.rs"));
@@ -44,6 +46,7 @@ use crate::register_contract::{sequencer_register, merkle_tree_poll};
 use common::{time_info_poll, RegisterContractInfo};
 use lb_core::mantle::ops::channel::ChannelId;
 use lb_key_management_system_service::keys::{Ed25519Key, ED25519_SECRET_KEY_SIZE};
+use crate::config::UniswapConfig;
 
 #[tokio::main]
 async fn main() {
@@ -130,6 +133,7 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
     // SPECDIF: only 1 price source - spec requires at least 3 sources
     match provider {
         "binance" => {
+            // TODO / FIXME: no need for to_lowercase call?
             // Binance uses: "btcusdt"
             let url_str = format!("{}/{}@ticker", price_feed_url, price_feed_provider.to_lowercase());
             let url = Url::parse(&url_str).context("Failed to parse Binance WS URL")?;
@@ -182,6 +186,33 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
                     price_feed_provider.as_str(),
                     price_feed_normalized,
                     tx
+                ).await
+            });
+        },
+        "uniswap" => {
+
+            let uniswap_cfg_path = args.uniswap_config
+                .ok_or(anyhow!("Please provide uniswap config file path"))?;
+
+            info!("Using Uniswap config path: {}", uniswap_cfg_path.display());
+            
+            let uniswap_cfg = {
+                let cfg_content = fs::read(uniswap_cfg_path)?;
+                let cfg: UniswapConfig = toml::from_slice(cfg_content.as_slice())?;
+                cfg
+            };
+
+            info!("Using Uniswap state view contract: {:?}", uniswap_cfg.contracts);
+
+            let rpc_url = args.ethereum_rpc_url.ok_or(anyhow!("Please provide --ethereum_rpc_url"))?;
+            let url = Url::parse(rpc_url.as_str()).context("Failed to parse Coinbase wss url")?;
+            set.spawn(async move {
+                uniswap_fetch::fetch_price(
+                    url,
+                    price_feed_provider.as_str(),
+                    price_feed_normalized,
+                    tx,
+                    uniswap_cfg
                 ).await
             });
         },
@@ -299,4 +330,3 @@ fn load_or_create_signing_key(path: &Path) -> anyhow::Result<Ed25519Key> {
         Ok(Ed25519Key::from_bytes(&key_bytes))
     }
 }
-

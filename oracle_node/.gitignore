@@ -4,6 +4,10 @@ target
 data
 sequencer.key
 
+# Env
+.env
+.env.test
+
 # IDE
 .idea
 .ai

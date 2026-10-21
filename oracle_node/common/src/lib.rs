@@ -5,6 +5,7 @@ mod binance;
 mod redstone;
 mod contract;
 mod coinbase;
+mod uniswap;
 
 pub use pyth::HermesPriceEvent;
 pub use time_fetch::{time_info_poll, TimeInfo};
@@ -18,3 +19,4 @@ pub use contract::{
     PricesContractInfo
 };
 pub use coinbase::{CoinbaseMessage, CoinbaseEvent, CoinbaseTicker, CoinbaseData};
+pub use uniswap::{UniswapData};

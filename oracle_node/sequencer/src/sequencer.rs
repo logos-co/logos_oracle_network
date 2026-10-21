@@ -168,6 +168,7 @@ impl Sequencer {
                     };
 
                     let mut to_hash: Vec<u8> = vec![];
+                    // SPECDIF: specs requires to hash the field first
                     to_hash.extend(obs.feed_id.as_bytes());
                     to_hash.extend(obs.price.to_le_bytes().as_slice());
                     to_hash.extend(obs.decimals.to_le_bytes().as_slice());

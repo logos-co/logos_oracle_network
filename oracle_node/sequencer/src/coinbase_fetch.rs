@@ -63,6 +63,7 @@ pub async fn fetch_price(
 
                             info!("Coinbase - got ticker: {:?}", ticker);
                             if let Ok(price_f64) = ticker.price.parse::<f64>() {
+                                // TODO: put this in PartialPriceObservation::TryFrom impl
                                 let price = (price_f64 * 1_000_000.0) as i64;
 
                                 let data = CoinbaseData {
@@ -95,15 +96,16 @@ pub async fn fetch_price(
 
 #[cfg(test)]
 mod tests {
-    use tracing_subscriber::EnvFilter;
-    use common::time_info_poll;
     use super::*;
+    use tracing_subscriber::EnvFilter;
+    use crate::test_utils::setup_test_tracing;
 
     #[tokio::test]
     async fn test_price_fetch() {
 
+        const TEST_TIMEOUT: Duration = Duration::from_secs(20);
+        const EXPECTED_PRICE_EVENT_COUNT: i32 = 3;
         setup_test_tracing();
-
         let _ = rustls::crypto::ring::default_provider().install_default();
 
         let url = Url::parse("wss://advanced-trade-ws.coinbase.com").unwrap();
@@ -115,8 +117,7 @@ mod tests {
             fetch_price(url, price_feed, price_feed_normalized, tx).await
         });
 
-        let expected_count = 3;
-        let f = tokio::time::timeout(Duration::from_secs(20), async move {
+        let f = tokio::time::timeout(TEST_TIMEOUT, async move {
             let mut counter = 0;
             loop {
                 let price = rx.recv().await;
@@ -125,25 +126,16 @@ mod tests {
                 }
                 info!("Received: {:?}", price);
                 counter += 1;
-                if counter >= expected_count {
+                if counter >= EXPECTED_PRICE_EVENT_COUNT {
                     break;
                 }
             }
             counter
         });
 
-        let res = f.await.unwrap();
-        // println!("res: {:?}", res);
-        assert_eq!(res, expected_count);
-    }
-
-    pub fn setup_test_tracing() {
-        // Note: tracing-test crate is another dev dependency and only listen to main thread
-        let _ = tracing_subscriber::fmt()
-            .with_test_writer()
-            .with_env_filter(EnvFilter::from_default_env())
-            // ignore error if another // unit test already init. it
-            .try_init();
+        let received = f.await.unwrap();
+        // debug!("res: {:?}", res);
+        assert_eq!(received, EXPECTED_PRICE_EVENT_COUNT);
     }
 }
 
