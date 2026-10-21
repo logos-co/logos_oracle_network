@@ -1,8 +1,7 @@
-use std::num::ParseFloatError;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 use url::Url;
-use common::{CoinbaseData, PartialPriceObservation, UniswapData};
+use common::{PartialPriceObservation, UniswapData};
 use alloy::{
     primitives::{Address, U160},
     providers::ProviderBuilder,
@@ -15,22 +14,6 @@ use anyhow::anyhow;
 use chrono::Utc;
 use tracing::{debug, error, info};
 use crate::config::UniswapConfig;
-/*
-sol! {
-    #[sol(rpc)]
-    contract UniswapV3Pool {
-        function slot0() external view returns (
-            uint160 sqrtPriceX96,
-            int24 tick,
-            uint16 observationIndex,
-            uint16 observationCardinality,
-            uint16 observationCardinalityNext,
-            uint8 feeProtocol,
-            bool unlocked
-        );
-    }
-}
-*/
 
 sol! {
     #[sol(rpc)]
@@ -58,67 +41,6 @@ sol! {
     }
 }
 
-/*
-pub async fn fetch_price(
-    url: Url,
-    price_feed: &str,
-    price_feed_normalized: &str,
-    price_update_queue: UnboundedSender<PartialPriceObservation>,
-
-) -> anyhow::Result<()> {
-
-    let provider = ProviderBuilder::new().connect_http(url);
-
-    // In config, price_feed is the pool_address (for Uniswap)
-    let pool_address: Address = price_feed
-        .parse()?;
-
-    let pool = UniswapV3Pool::new(pool_address, provider);
-
-    loop {
-        match pool.slot0().call().await {
-            Ok(slot0) => {
-                let sqrt_price_x96: U160 = slot0.sqrtPriceX96;
-
-                // --- Uniswap V3 Math ---
-                // The safest way to convert large alloy Uint types to f64
-                // is to parse them via their string representation.
-                let sqrt_price_f64: f64 = sqrt_price_x96.to_string().parse().unwrap();
-
-                // Divide by 2^96
-                let two_pow_96 = 2.0_f64.powi(96);
-                let price_ratio = sqrt_price_f64 / two_pow_96;
-
-                // Square it
-                let raw_price = price_ratio * price_ratio;
-
-                // Adjust for Token Decimals (USDC = 6, WETH = 18)
-                let decimal_adjustment = 10_f64.powi(18 - 6);
-                let actual_price = raw_price / decimal_adjustment;
-
-                // Invert because the pool is USDC/WETH (Token0/Token1)
-                let eth_usdc_price = 1.0 / actual_price;
-
-                info!("Uniswap V3 (Alloy) ETH/USDC Price: {}", eth_usdc_price);
-
-                let price_u64 = (eth_usdc_price * 1_000_000.0) as u64;
-
-                // monitor.add_price(FeedKey { feed_id: "ETH/USDC".into(), provider: "uniswap_v3".into() }, price_u64);
-                info!("Uniswap V3 (Alloy) ETH/USDC Price u64: {}", eth_usdc_price);
-            }
-            Err(e) => {
-                error!("Failed to fetch Uniswap price: {}", e);
-            }
-        }
-
-        // Poll every 12 seconds
-        tokio::time::sleep(Duration::from_secs(12)).await;
-    }
-
-    Ok(())
-}
-*/
-
 pub async fn fetch_price(
     url: Url,
     price_feed: &str,
@@ -126,12 +48,8 @@ pub async fn fetch_price(
     price_update_queue: UnboundedSender<PartialPriceObservation>,
     cfg: UniswapConfig,
 ) -> anyhow::Result<()> {
+
     let provider = ProviderBuilder::new().connect_http(url);
-
-    // In config, price_feed is the pool_address (for Uniswap)
-    // let pool_address: Address = price_feed
-    //    .parse()?;
-
     let state_view = StateView::new(cfg.contracts.state_view, provider.clone());
 
     let (token_0, token_1) = price_feed.split_once("/")
@@ -150,15 +68,15 @@ pub async fn fetch_price(
     info!("currency 0: {}", currency0.to_string());
     info!("currency 1: {}", currency1.to_string());
 
-    // 2. Dynamically fetch the decimals from the chain ONCE
+    // Fetch the decimals onchain
     let erc20_0 = IERC20::new(*currency0, provider.clone());
     let erc20_1 = IERC20::new(*currency1, provider.clone());
 
     let decimals_0 = erc20_0.decimals().call().await?;
     let decimals_1 = erc20_1.decimals().call().await?;
 
-    info!("Token0 Decimals: {}", decimals_0);
-    info!("Token1 Decimals: {}", decimals_1);
+    info!("Token 0 Decimals: {}", decimals_0);
+    info!("Token 1 Decimals: {}", decimals_1);
 
     let pool_key = PoolKey {
         currency0: *currency0,
@@ -169,7 +87,6 @@ pub async fn fetch_price(
     };
 
     let pool_id: B256 = keccak256(pool_key.abi_encode());
-    // let target_multiplier = 10_f64.powi(target_decimals as i32);
 
     loop {
         match state_view.getSlot0(pool_id).call().await {
@@ -190,8 +107,7 @@ pub async fn fetch_price(
                     is_base_token_0: (currency0 == token_0_addr)
                 };
 
-                match PartialPriceObservation::try_from(
-                    (price_feed_normalized.to_string(), data)) {
+                match PartialPriceObservation::try_from((price_feed_normalized.to_string(), data)) {
                     Ok(price_obs) => {
                         if let Err(e) = price_update_queue.send(price_obs) {
                             error!("Error while sending price update event: {}", e);
@@ -203,7 +119,7 @@ pub async fn fetch_price(
                 }
             }
             Err(e) => {
-                error!("Failed to fetch Uniswap V4 price: {}", e)
+                error!("Failed to fetch Uniswap V4 price: {}", e);
             },
         }
         tokio::time::sleep(Duration::from_secs(12)).await;
