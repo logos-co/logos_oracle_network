@@ -9,11 +9,12 @@ option java_multiple_files = true;
 
 // SPECDIF: decimals is u32, spec defines it as i32
 // SPECDIF: oracle_index field added
+// SPECDIF: round is set as current slot (not block-height)
 message PriceObservation {
   string feed_id           = 1;  // asset pair identifier, e.g. "BTC/USDT"
   int64  price             = 2;  // integer-encoded price, real value = price * 10^(-decimals)
-  uint32  decimals          = 3;  // number of decimal places in `price` which is 6
-  int64  round             = 4;  // round identifier, in Bedrock block-height terms
+  uint32  decimals         = 3;  // number of decimal places in `price` which is 6
+  uint64  round            = 4;  // round identifier, in Bedrock block-height terms
   int64  timestamp         = 5;  // observation time (unix milliseconds), advisory only
   bytes  oracle_id         = 6;  // the node's 32-byte BIP-340 x-only public key, also its channel key and staking identity
   uint32 oracle_index      = 7;
@@ -22,11 +23,12 @@ message PriceObservation {
 }
 
 // SPECDIF: decimals is u32, spec defines it as i32 -- feed_id is bytes, specs defines it as string
+// SPECFIF: round (see PriceObservation)
 message AttestedPrice {
   bytes  feed_id      = 1;  // asset pair identifier, e.g. sha256("BTC/USDT")
   int64  price        = 2;  // attested median, real value = price * 10^(-decimals)
-  uint32  decimals     = 3;  // number of decimal places in `price`
+  uint32  decimals    = 3;  // number of decimal places in `price`
   uint32 valid_count  = 4;  // number of observations aggregated in this round
-  int64  round        = 5;  // round identifier, in Bedrock block-height terms
+  uint64  round       = 5;  // round identifier, in Bedrock block-height terms
   int64  confidence   = 6;  // OPTIONAL: dispersion of observations, scaled like `price`
 }

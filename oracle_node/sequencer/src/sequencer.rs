@@ -14,6 +14,7 @@ use chrono::Utc;
 use rs_merkle::algorithms::Keccak256;
 use rs_merkle::{proof_serializers, MerkleTree};
 use tokio::sync::RwLock;
+use tokio::sync::watch::{Receiver, Ref};
 // third-party - logos
 use logos_blockchain_zone_sdk::{
     adapter::NodeHttpClient,
@@ -34,7 +35,7 @@ use lb_key_management_system_service::{
 };
 // internal
 use crate::zone_state::InMemoryZoneState;
-use common::{PartialPriceObservation, PROVIDER_BINANCE, PRICE_OBSERVATION_DECIMAL};
+use common::{PartialPriceObservation, PROVIDER_BINANCE, PRICE_OBSERVATION_DECIMAL, TimeInfo};
 use crate::lon::PriceObservation;
 use crate::monitor::FeedKey;
 use crate::pre_aggregator::PreAggregator;
@@ -49,6 +50,7 @@ pub struct Sequencer {
     oracle_channel_keypair: Ed25519Key,
     merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>,
     provider_count: usize,
+    time_info_rx: Receiver<Option<TimeInfo>>,
 }
 
 impl Sequencer {
@@ -64,6 +66,7 @@ impl Sequencer {
         oracle_channel_id: ChannelId,
         merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>,
         provider_count: usize,
+        time_info_rx: Receiver<Option<TimeInfo>>,
     ) -> anyhow::Result<Self> {
 
         let checkpoint = None;
@@ -91,6 +94,7 @@ impl Sequencer {
             oracle_channel_keypair: signing_key,
             merkle_tree_registered_oracle,
             provider_count,
+            time_info_rx,
         })
     }
 
@@ -105,6 +109,7 @@ impl Sequencer {
         let oracle_channel_keypair = self.oracle_channel_keypair.clone();
         let merkle_tree = self.merkle_tree_registered_oracle.clone();
         let provider_count = self.provider_count;
+        let time_info_rx = self.time_info_rx.clone();
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_mins(1));
@@ -178,6 +183,19 @@ impl Sequencer {
                 // Compute median & remove
                 let agg = PreAggregator::new(300, 30); // 3% max deviation, 30s max staleness
                 let now = Utc::now().timestamp();
+                // let time_info_current_slot = time_info_rx.borrow().unwrap().current_slot;
+
+                let time_info_current_slot = match *time_info_rx.borrow() {
+                    // Some(time_info) => time_info.curent_slot,
+                    // None => {
+                    //    warn!("No TimeInfo available, skipping this round...");
+                    // }
+                    Some(time_info) => time_info.current_slot,
+                    _ => {
+                        continue;
+                    }
+                };
+
                 let price_latest_ = agg.compute_local_median(price_latest_list.as_slice(), now);
 
                 let price_latest = match price_latest_ {
@@ -203,7 +221,7 @@ impl Sequencer {
                         price: price_latest,
                         // price: 0,
                         decimals: PRICE_OBSERVATION_DECIMAL,
-                        round, // TODO: need Logos RPC doc
+                        round: time_info_current_slot,
                         timestamp: now,
                         oracle_id: oracle_channel_keypair.public_key().to_bytes().to_vec(),
                         oracle_index: oracle_node_index,

@@ -87,6 +87,9 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
 
     // merkle tree
     let merkle_tree = Arc::new(RwLock::new(Default::default()));
+    
+    // Time info queue
+    let (time_info_tx, time_info_rx) = tokio::sync::watch::channel(None);
 
     let mut sequencer = Sequencer::new(
         &args.node_rest_url,
@@ -98,7 +101,8 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
         oracle_keypair,
         ChannelId::from(oracle_pubk.to_bytes()),
         merkle_tree.clone(),
-        args.provider.len()
+        args.provider.len(),
+        time_info_rx.clone(),
     )
         .context("Failed to initialize sequencer")?;
 
@@ -109,7 +113,6 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
     let price_monitor = PriceMonitor::new(price_map.clone());
 
     // Setup time info poll
-    let (time_info_tx, _time_info_rx) = tokio::sync::watch::channel(None);
     let poll_interval = Duration::from_millis(20);
 
     // Register (or check it is already registered) to oracle_register contract

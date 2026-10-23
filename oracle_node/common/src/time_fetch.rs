@@ -19,7 +19,7 @@ use tracing::{
 /// Time info
 /// https://github.com/logos-blockchain/logos-blockchain/blob/e425bac1f4d403ef3369db1100887c65a5f75b9a/nodes/node/binary/src/api/handlers.rs#L488
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct TimeInfo {
     pub slot_duration_ms: u64,
     pub genesis_time_unix_ms: u64,

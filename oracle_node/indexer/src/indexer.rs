@@ -364,7 +364,7 @@ async fn price_feed_worker(
                             price: attested_median,
                             decimals: PRICE_OBSERVATION_DECIMAL,
                             valid_count: obs_count as u32,
-                            round: current_round as i64,
+                            round: current_round,
                             confidence: 0, // TODO: Implement 1.4826 * MAD
                         };
 
