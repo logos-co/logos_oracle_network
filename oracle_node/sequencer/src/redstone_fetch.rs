@@ -41,7 +41,9 @@ pub async fn fetch_price(
                                     }
 
                                     let update_event_0 = std::mem::take(&mut update_event[0]);
-
+                                    
+                                    unimplemented!()
+                                    /*
                                     match PartialPriceObservation::try_from(
                                         (symbol_normalized.to_string(), update_event_0)) {
                                         Ok(price_obs) => {
@@ -53,7 +55,7 @@ pub async fn fetch_price(
                                             error!("Error while converting event to price update event: {}", e);
                                         }
                                     }
-
+                                    */
                                 },
                                 Err(err) => {
                                     eprintln!("Failed to parse RedStone JSON: {}\nRaw data: {}", err, text);

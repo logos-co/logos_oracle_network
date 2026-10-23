@@ -24,4 +24,6 @@ pub struct CoinbaseData {
     pub price: i64,
     pub timestamp: i64,
     pub feed_id: String,
+    pub feed_id_normalized: String,
+    pub provider_index: i32,
 }

@@ -43,6 +43,7 @@ sol! {
 
 pub async fn fetch_price(
     url: Url,
+    provider_index: i32,
     price_feed: &str,
     price_feed_normalized: &str,
     price_update_queue: UnboundedSender<PartialPriceObservation>,
@@ -104,10 +105,12 @@ pub async fn fetch_price(
                     feed_id: price_feed.to_string(),
                     token_0_decimals: decimals_0,
                     token_1_decimals: decimals_1,
-                    is_base_token_0: (currency0 == token_0_addr)
+                    is_base_token_0: (currency0 == token_0_addr),
+                    feed_id_normalized: price_feed_normalized.to_string(),
+                    provider_index,
                 };
 
-                match PartialPriceObservation::try_from((price_feed_normalized.to_string(), data)) {
+                match PartialPriceObservation::try_from(data) {
                     Ok(price_obs) => {
                         if let Err(e) = price_update_queue.send(price_obs) {
                             error!("Error while sending price update event: {}", e);
@@ -131,11 +134,13 @@ pub async fn fetch_price(
 
 #[cfg(test)]
 mod tests {
-    use anyhow::Context;
     use super::*;
+    use anyhow::Context;
+    use serial_test::serial;
     use crate::test_utils::setup_test_tracing;
 
     #[tokio::test]
+    #[serial]
     async fn test_price_fetch() -> anyhow::Result<()> {
 
         const TEST_TIMEOUT: Duration = Duration::from_secs(45);
@@ -161,7 +166,7 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
         let _handle = tokio::spawn(async move {
-            let res = fetch_price(test_rpc_url, price_feed, price_feed_normalized, tx, uniswap_cfg).await;
+            let res = fetch_price(test_rpc_url, 0, price_feed, price_feed_normalized, tx, uniswap_cfg).await;
             debug!("fetch_price result: {:?}", res);
             res
         });
@@ -182,7 +187,7 @@ mod tests {
             counter
         });
 
-        let received = f.await.unwrap();
+        let received = f.await.context("While waiting/receiving price observation")?;
         debug!("received: {:?}", received);
         assert_eq!(received, EXPECTED_PRICE_EVENT_COUNT);
 

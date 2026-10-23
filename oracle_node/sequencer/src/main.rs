@@ -10,6 +10,7 @@ mod coinbase_fetch;
 mod uniswap_fetch;
 mod config;
 mod test_utils;
+mod pre_aggregator;
 
 pub mod lon {
     include!(concat!(env!("OUT_DIR"), "/lon.rs"));
@@ -29,6 +30,7 @@ use dashmap::DashMap;
 use rand::Rng;
 use tokio::task::JoinSet;
 use serde::Deserialize;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::RwLock;
 use tracing::{
     info,
@@ -40,10 +42,10 @@ use tracing::{
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use url::Url;
 // internal
-use crate::args::SequencerArgs;
+use crate::args::{Provider, SequencerArgs};
 use crate::monitor::PriceMonitor;
 use crate::register_contract::{sequencer_register, merkle_tree_poll};
-use common::{time_info_poll, RegisterContractInfo};
+use common::{time_info_poll, RegisterContractInfo, PartialPriceObservation};
 use lb_core::mantle::ops::channel::ChannelId;
 use lb_key_management_system_service::keys::{Ed25519Key, ED25519_SECRET_KEY_SIZE};
 use crate::config::UniswapConfig;
@@ -68,18 +70,18 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
     let oracle_keypair = load_or_create_signing_key(key_full_path.as_path())?;
     let oracle_pubk = oracle_keypair.public_key();
 
-    let cfg = parse_provider_config(args.provider_config.as_path())
+    let provider_cfg = parse_provider_config(args.provider_config.as_path())
         .context(format!("while parsing provider config: {}", args.provider_config.display()))?;
     
-    let provider = "binance";
+    // let provider = "binance";
     // let provider = "redstone";
-    let price_feed_normalized = "ETH/USD";
-    let price_feed_url = cfg.endpoints.get(provider).ok_or(anyhow!("Cannot get an url for provider"))?;
-    let price_feed_provider = cfg.feeds.get(provider)
-        .ok_or(anyhow!("Cannot get feeds for provider"))?
-        .get(price_feed_normalized)
-        .ok_or(anyhow!("Cannot get price feed provider"))?
-        .clone();
+    // let price_feed_normalized = "ETH/USD";
+    // let price_feed_url = cfg.endpoints.get(provider).ok_or(anyhow!("Cannot get an url for provider"))?;
+    // let price_feed_provider = cfg.feeds.get(provider)
+    //     .ok_or(anyhow!("Cannot get feeds for provider"))?
+    //     .get(price_feed_normalized)
+    //     .ok_or(anyhow!("Cannot get price feed provider"))?
+    //     .clone();
 
     let price_map = Arc::new(DashMap::new());
 
@@ -88,14 +90,15 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
 
     let mut sequencer = Sequencer::new(
         &args.node_rest_url,
-        args.node_auth_username,
-        args.node_auth_password,
-        args.data_folder.join(&args.checkpoint_path),
+        args.node_auth_username.clone(),
+        args.node_auth_password.clone(),
+        args.data_folder.clone().join(&args.checkpoint_path),
         price_map.clone(),
-        price_feed_normalized.to_string(),
+        args.price_feed_normalized.clone(),
         oracle_keypair,
         ChannelId::from(oracle_pubk.to_bytes()),
-        merkle_tree.clone()
+        merkle_tree.clone(),
+        args.provider.len()
     )
         .context("Failed to initialize sequencer")?;
 
@@ -122,15 +125,18 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
     };
 
     let mut set = JoinSet::new();
+    let node_rest_url = args.node_rest_url.clone();
     set.spawn(async move {
-        time_info_poll( args.node_rest_url.clone(), poll_interval, time_info_tx).await
+        time_info_poll(node_rest_url, poll_interval, time_info_tx).await
     });
 
     set.spawn(async move {
         merkle_tree_poll(&oracle_register_cfg, merkle_tree, poll_interval).await
     });
 
-    // SPECDIF: only 1 price source - spec requires at least 3 sources
+    spawn_fetch_price_tasks(&mut set, &args, &provider_cfg, tx)?;
+
+    /*
     match provider {
         "binance" => {
             // TODO / FIXME: no need for to_lowercase call?
@@ -220,6 +226,7 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
             unimplemented!()
         }
     }
+    */
 
     // set.spawn(async move { price_monitor.run(&mut rx).await });
     // // FIXME: wait_ready ?
@@ -329,4 +336,135 @@ fn load_or_create_signing_key(path: &Path) -> anyhow::Result<Ed25519Key> {
         ;
         Ok(Ed25519Key::from_bytes(&key_bytes))
     }
+}
+
+fn spawn_fetch_price_tasks(set: &mut JoinSet<Result<(), anyhow::Error>>,
+                           args: &SequencerArgs,
+                           provider_cfg: &PriceProviderConfig,
+                           tx: UnboundedSender<PartialPriceObservation>
+) -> anyhow::Result<()> {
+
+    let mut providers = args.provider.clone();
+    let provider_index = 0;
+
+    loop {
+
+        let provider = providers.pop();
+        let provider = match provider {
+            Some(provider) => provider,
+            None => break,
+        };
+
+        let price_feed_normalized = args.price_feed_normalized.clone();
+        let price_feed_url = provider_cfg
+            .endpoints
+            .get(provider.as_str())
+            .ok_or(anyhow!("Cannot get an url for provider"))?;
+        let price_feed_provider = provider_cfg.feeds.get(provider.as_str())
+            .ok_or(anyhow!("Cannot get feeds for provider"))?
+            .get(price_feed_normalized.as_str())
+            .ok_or(anyhow!("Cannot get price feed provider"))?
+            .clone();
+
+        match provider {
+            Provider::Binance => {
+                // TODO / FIXME: no need for to_lowercase call?
+                // Binance uses: "btcusdt"
+                let url_str = format!("{}/{}@ticker", price_feed_url, price_feed_provider.to_lowercase());
+                let url = Url::parse(&url_str).context("Failed to parse Binance WS URL")?;
+                let tx_ = tx.clone();
+                set.spawn(async move {
+                    binance_fetch::fetch_price(
+                        url,
+                        provider_index,
+                        price_feed_provider.as_str(),
+                        price_feed_normalized.as_str(),
+                        tx_
+                    ).await
+                });
+            },
+            /*
+            "redstone" => {
+                // Can be: redstone, redstone-rapid, redstone-stocks, redstone-custom-urls
+                let redstone_provider = "redstone";
+                let url_str = format!("https://api.redstone.finance/prices?symbol={}&provider={}", price_feed_provider, redstone_provider);
+                let url = Url::parse(&url_str).context("Failed to parse Redstone https URL")?;
+                set.spawn(async move {
+                    redstone_fetch::fetch_price(
+                        url,
+                        price_feed_provider.as_str(),
+                        price_feed_normalized,
+                        tx
+                    ).await
+                });
+            },
+            "pyth" => {
+                if args.pyth_bearer.is_none() {
+                    return Err(anyhow!("Pyth bearer token not specified"));
+                }
+
+                let url_str = format!("{}?ids[]={}", price_feed_url, price_feed_provider);
+                let url = Url::parse(&url_str).context("Failed to parse Pyth SSE URL")?;
+                set.spawn(async move {
+                    pyth_fetch::fetch_price(
+                        url,
+                        args.pyth_bearer.unwrap().as_str(),
+                        price_feed_provider.as_str(),
+                        price_feed_normalized,
+                        tx
+                    ).await
+                });
+            },
+            */
+            Provider::Coinbase => {
+                let url = Url::parse(price_feed_url).context("Failed to parse Coinbase wss url")?;
+                let tx_ = tx.clone();
+                set.spawn(async move {
+                    coinbase_fetch::fetch_price(
+                        url,
+                        provider_index,
+                        price_feed_provider.as_str(),
+                        price_feed_normalized.as_str(),
+                        tx_
+                    ).await
+                });
+            },
+            Provider::Uniswap => {
+                let uniswap_cfg_path = args.uniswap_config
+                    .clone()
+                    .ok_or(anyhow!("Please provide uniswap config file path"))?;
+
+                info!("Using Uniswap config path: {}", uniswap_cfg_path.display());
+
+                let uniswap_cfg = {
+                    let cfg_content = fs::read(uniswap_cfg_path)?;
+                    let cfg: UniswapConfig = toml::from_slice(cfg_content.as_slice())?;
+                    cfg
+                };
+
+                info!("Using Uniswap state view contract: {:?}", uniswap_cfg.contracts);
+
+                let rpc_url = args.ethereum_rpc_url.clone().ok_or(anyhow!("Please provide --ethereum_rpc_url"))?;
+                let url = Url::parse(rpc_url.as_str()).context("Failed to parse Coinbase wss url")?;
+                let tx_ = tx.clone();
+                set.spawn(async move {
+                    uniswap_fetch::fetch_price(
+                        url,
+                        provider_index,
+                        price_feed_provider.as_str(),
+                        price_feed_normalized.as_str(),
+                        tx_,
+                        uniswap_cfg
+                    ).await
+                });
+            },
+            /*
+            _ => {
+                unimplemented!()
+            }
+            */
+        }
+    }
+
+    Ok(())
 }

@@ -5,10 +5,11 @@ use tokio_tungstenite::connect_async;
 use tracing::{info, error};
 use url::Url;
 
-use common::{BinancePriceEvent, PartialPriceObservation};
+use common::{BinancePriceEvent, PartialPriceObservation, WrappedBinancePriceEvent};
 
 pub async fn fetch_price(
     url: Url,
+    provider_index: i32,
     price_feed: &str,
     price_feed_normalized: &str,
     price_update_queue: UnboundedSender<PartialPriceObservation>) -> anyhow::Result<()> {
@@ -40,9 +41,14 @@ pub async fn fetch_price(
                                             error!("Binance price event symbol: {}, expected: {}", update_event.symbol, price_feed);
                                             continue;
                                         }
+                                        
+                                        let wrapped_event = WrappedBinancePriceEvent {
+                                            feed_id_normalized: price_feed_normalized.to_string(),
+                                            provider_index,
+                                            event: update_event,
+                                        };
 
-                                        match PartialPriceObservation::try_from(
-                                            (price_feed_normalized.to_string(), update_event)) {
+                                        match PartialPriceObservation::try_from(wrapped_event) {
                                             Ok(price_obs) => {
                                                 if let Err(e) = price_update_queue.send(price_obs) {
                                                     error!("Error while sending price update event: {}", e);

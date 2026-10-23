@@ -10,6 +10,7 @@ use url::Url;
 use prost::Message;
 use tracing::{info, debug, error, warn};
 use bytes::Bytes;
+use chrono::Utc;
 use rs_merkle::algorithms::Keccak256;
 use rs_merkle::{proof_serializers, MerkleTree};
 use tokio::sync::RwLock;
@@ -33,9 +34,10 @@ use lb_key_management_system_service::{
 };
 // internal
 use crate::zone_state::InMemoryZoneState;
-use common::{PartialPriceObservation, PROVIDER_BINANCE};
+use common::{PartialPriceObservation, PROVIDER_BINANCE, PRICE_OBSERVATION_DECIMAL};
 use crate::lon::PriceObservation;
 use crate::monitor::FeedKey;
+use crate::pre_aggregator::PreAggregator;
 
 pub struct Sequencer {
     sequencer: ZoneSequencer<NodeHttpClient>,
@@ -45,7 +47,8 @@ pub struct Sequencer {
     price_map: Arc<DashMap<FeedKey, VecDeque<PartialPriceObservation>>>,
     price_feed: String,
     oracle_channel_keypair: Ed25519Key,
-    merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>> 
+    merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>,
+    provider_count: usize,
 }
 
 impl Sequencer {
@@ -59,7 +62,8 @@ impl Sequencer {
         price_feed: String,
         oracle_signing_key: Ed25519Key,
         oracle_channel_id: ChannelId,
-        merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>
+        merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>,
+        provider_count: usize,
     ) -> anyhow::Result<Self> {
 
         let checkpoint = None;
@@ -86,6 +90,7 @@ impl Sequencer {
             price_feed,
             oracle_channel_keypair: signing_key,
             merkle_tree_registered_oracle,
+            provider_count,
         })
     }
 
@@ -99,6 +104,7 @@ impl Sequencer {
         let price_feed = self.price_feed.clone();
         let oracle_channel_keypair = self.oracle_channel_keypair.clone();
         let merkle_tree = self.merkle_tree_registered_oracle.clone();
+        let provider_count = self.provider_count;
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_mins(1));
@@ -125,10 +131,11 @@ impl Sequencer {
 
             loop {
 
+                /*
                 // take prices from price_map
                 let key = FeedKey {
                     feed_id: price_feed.clone(),
-                    provider: PROVIDER_BINANCE.to_string(),
+                    provider_index: 0,
                 };
                 let prices = if let Some(mut price_feed_ref_mut) = price_map.get_mut(&key) {
                     std::mem::take(price_feed_ref_mut.value_mut())
@@ -141,6 +148,39 @@ impl Sequencer {
                     // info!("No prices...");
                     // interval.tick().await;
                     continue
+                };
+                */
+
+                let mut price_latest_list = vec![];
+                for i in 0..provider_count {
+                    let key = FeedKey {
+                        feed_id: price_feed.clone(),
+                        provider_index: 0,
+                    };
+                    let prices = if let Some(mut price_feed_ref_mut) = price_map.get_mut(&key) {
+                        std::mem::take(price_feed_ref_mut.value_mut())
+                    } else {
+                        continue
+                    };
+
+                    // let Some(price_latest) = prices.back() else {
+                    //     continue
+                    // };
+
+                    if let Some(price_latest) = prices.back() {
+                        price_latest_list.push(price_latest.clone());
+                    }
+                }
+
+                // Now we have a list of 1 PartialPriceObservation (most recent / per provider)
+                // Compute median & remove
+                let agg = PreAggregator::new(300, 30); // 3% max deviation, 30s max staleness
+                let now = Utc::now().timestamp();
+                let price_latest_ = agg.compute_local_median(price_latest_list.as_slice(), now);
+
+                let price_latest = match price_latest_ {
+                    Some(price_latest) => price_latest,
+                    None => continue
                 };
 
                 let obs = {
@@ -156,11 +196,13 @@ impl Sequencer {
                     };
                     
                     let mut obs = PriceObservation {
-                        feed_id: price_latest.feed_id.clone(),
-                        price: price_latest.price,
-                        decimals: price_latest.decimals,
+                        feed_id: price_feed.clone(),
+                        // feed_id: "".to_string(),
+                        price: price_latest,
+                        // price: 0,
+                        decimals: PRICE_OBSERVATION_DECIMAL,
                         round, // TODO: need Logos RPC doc
-                        timestamp: price_latest.timestamp,
+                        timestamp: now,
                         oracle_id: oracle_channel_keypair.public_key().to_bytes().to_vec(),
                         oracle_index: oracle_node_index,
                         signature: vec![],

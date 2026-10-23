@@ -66,6 +66,7 @@ oracle_register_client = { path = "../../oracle_register_client" }
 rs_merkle = { version = "1.5.0", features = ["keccak256"] }
 toml = "1.1.8"
 dotenvy = "0.15.7"
+serial_test.workspace = true
 
 [build-dependencies]
 prost-build = "0.14"

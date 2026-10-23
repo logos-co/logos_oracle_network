@@ -6,7 +6,7 @@ use pyth_sdk::Price;
 use rust_decimal::prelude::FromPrimitive;
 use chrono::DateTime;
 // internal
-use crate::{BinancePriceEvent, RedstonePriceEvent, HermesPriceEvent, CoinbaseMessage, CoinbaseData, UniswapData};
+use crate::{RedstonePriceEvent, HermesPriceEvent, CoinbaseMessage, CoinbaseData, UniswapData, WrappedBinancePriceEvent};
 
 pub const PRICE_OBSERVATION_DECIMAL: u32 = 6;
 const PRICE_OBSERVATION_DECIMAL_I32: i32 = - (PRICE_OBSERVATION_DECIMAL as i32);
@@ -21,30 +21,33 @@ pub const PROVIDER_UNISWAP: &str = "uniswap";
 pub struct PartialPriceObservation {
     pub feed_id: String,
     pub provider: String,
+    pub provider_index: i32,
     pub feed_id_provider: String,
     pub price: i64,
     pub decimals: u32,
     pub timestamp: i64,
 }
 
-impl TryFrom<(String, BinancePriceEvent)> for PartialPriceObservation {
+impl TryFrom<WrappedBinancePriceEvent> for PartialPriceObservation {
     type Error = anyhow::Error;
-    fn try_from((feed_id_normalized, event): (String, BinancePriceEvent)) -> Result<Self, Self::Error> {
+    fn try_from(wevent: WrappedBinancePriceEvent) -> Result<Self, Self::Error> {
 
-        let mut decimal = Decimal::from_str(event.last_price.as_str())?;
+        let mut decimal = Decimal::from_str(wevent.event.last_price.as_str())?;
         decimal.rescale(PRICE_OBSERVATION_DECIMAL);
         let scaled_i64 = decimal.mantissa() as i64;
         Ok(Self {
-            feed_id: feed_id_normalized,
+            feed_id: wevent.feed_id_normalized,
             provider: PROVIDER_BINANCE.to_string(),
-            feed_id_provider: event.symbol,
+            provider_index: wevent.provider_index,
+            feed_id_provider: wevent.event.symbol,
             price: scaled_i64,
             decimals: PRICE_OBSERVATION_DECIMAL,
-            timestamp: event.event_time.try_into()?,
+            timestamp: wevent.event.event_time.try_into()?,
         })
     }
 }
 
+/*
 impl TryFrom<(String, RedstonePriceEvent)> for PartialPriceObservation {
     type Error = anyhow::Error;
     fn try_from((feed_id_normalized, event): (String, RedstonePriceEvent)) -> Result<Self, Self::Error> {
@@ -64,7 +67,9 @@ impl TryFrom<(String, RedstonePriceEvent)> for PartialPriceObservation {
         })
     }
 }
+*/
 
+/*
 impl TryFrom<(String, HermesPriceEvent)> for PartialPriceObservation {
     type Error = anyhow::Error;
     fn try_from((feed_id_normalized, event): (String, HermesPriceEvent)) -> Result<Self, Self::Error> {
@@ -96,14 +101,16 @@ impl TryFrom<(String, HermesPriceEvent)> for PartialPriceObservation {
         })
     }
 }
+*/
 
-impl TryFrom<(String, CoinbaseData)> for PartialPriceObservation {
+impl TryFrom<CoinbaseData> for PartialPriceObservation {
     type Error = anyhow::Error;
-    fn try_from((feed_id_normalized, data): (String, CoinbaseData)) -> Result<Self, Self::Error> {
+    fn try_from(data: CoinbaseData) -> Result<Self, Self::Error> {
 
         Ok(Self {
-            feed_id: feed_id_normalized,
+            feed_id: data.feed_id_normalized,
             provider: PROVIDER_COINBASE.to_string(),
+            provider_index: data.provider_index,
             feed_id_provider: data.feed_id,
             price: data.price,
             decimals: PRICE_OBSERVATION_DECIMAL,
@@ -117,10 +124,10 @@ const TWO_POW_96: f64 = 79_228_162_514_264_337_593_543_950_336.0;
 // ~= const PRICE_OBSERVATION_10_POWI_DECIMAL = 10_f64.powi(PRICE_OBSERVATION_DECIMAL_I32);
 const PRICE_OBSERVATION_10_POWI_DECIMAL: f64 = 1_000_000.0;
 
-impl TryFrom<(String, UniswapData)> for PartialPriceObservation {
+impl TryFrom<UniswapData> for PartialPriceObservation {
     type Error = anyhow::Error;
 
-    fn try_from((feed_id_normalized, data): (String, UniswapData)) -> Result<Self, Self::Error> {
+    fn try_from(data: UniswapData) -> Result<Self, Self::Error> {
 
         // Uniswap Math
         let price_ratio = data.price / TWO_POW_96;
@@ -142,8 +149,9 @@ impl TryFrom<(String, UniswapData)> for PartialPriceObservation {
         let price_final = (final_price_f64 * PRICE_OBSERVATION_10_POWI_DECIMAL).round() as i64;
 
         Ok(Self {
-            feed_id: feed_id_normalized,
+            feed_id: data.feed_id_normalized,
             provider: PROVIDER_UNISWAP.to_string(),
+            provider_index: data.provider_index,
             feed_id_provider: data.feed_id,
             price: price_final,
             decimals: PRICE_OBSERVATION_DECIMAL,
