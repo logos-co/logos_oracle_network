@@ -152,10 +152,12 @@ impl Sequencer {
                 */
 
                 let mut price_latest_list = vec![];
+                // Note: Each price_fetch task has a provider_index (starting at 0), then price monitor task
+                // use this index (for FeedKey in DashMap)
                 for i in 0..provider_count {
                     let key = FeedKey {
                         feed_id: price_feed.clone(),
-                        provider_index: 0,
+                        provider_index: i,
                     };
                     let prices = if let Some(mut price_feed_ref_mut) = price_map.get_mut(&key) {
                         std::mem::take(price_feed_ref_mut.value_mut())

@@ -9,7 +9,7 @@ use common::{BinancePriceEvent, PartialPriceObservation, WrappedBinancePriceEven
 
 pub async fn fetch_price(
     url: Url,
-    provider_index: i32,
+    provider_index: usize,
     price_feed: &str,
     price_feed_normalized: &str,
     price_update_queue: UnboundedSender<PartialPriceObservation>) -> anyhow::Result<()> {

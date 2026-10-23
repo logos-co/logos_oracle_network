@@ -21,7 +21,7 @@ pub const PROVIDER_UNISWAP: &str = "uniswap";
 pub struct PartialPriceObservation {
     pub feed_id: String,
     pub provider: String,
-    pub provider_index: i32,
+    pub provider_index: usize,
     pub feed_id_provider: String,
     pub price: i64,
     pub decimals: u32,

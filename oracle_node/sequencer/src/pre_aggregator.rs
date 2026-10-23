@@ -1,3 +1,4 @@
+use tracing::debug;
 use common::PartialPriceObservation;
 
 pub struct PreAggregator {
@@ -30,6 +31,7 @@ impl PreAggregator {
             .collect();
 
         if valid.is_empty() {
+            debug!("No valid observations found (too old observations or negative prices)");
             return None;
         }
 
@@ -55,6 +57,7 @@ impl PreAggregator {
             .collect();
 
         if filtered.is_empty() {
+            debug!("No valid observations (after gross outlier filtering)");
             return None;
         }
 

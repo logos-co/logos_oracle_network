@@ -11,7 +11,7 @@ const MAX_VEC_SIZE_PER_FEED_ID: usize = 1024;
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct FeedKey {
     pub feed_id: String,
-    pub provider_index: i32,
+    pub provider_index: usize,
 }
 
 pub struct PriceMonitor {

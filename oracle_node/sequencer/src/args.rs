@@ -98,7 +98,7 @@ pub struct SequencerArgs {
     pub price_feed_normalized: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)] // Added `Hash` just in case you use the enum itself as a key later!
+#[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
 pub enum Provider {
     Binance,
     Coinbase,
@@ -106,7 +106,6 @@ pub enum Provider {
 }
 
 impl Provider {
-    /// Returns the string representation of the provider
     pub fn as_str(&self) -> &'static str {
         match self {
             Provider::Binance => "binance",

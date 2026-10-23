@@ -29,6 +29,6 @@ pub struct BinancePriceEvent {
 
 pub struct WrappedBinancePriceEvent {
     pub feed_id_normalized: String,
-    pub provider_index: i32,
+    pub provider_index: usize,
     pub event: BinancePriceEvent,
 }
