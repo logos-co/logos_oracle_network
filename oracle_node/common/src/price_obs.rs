@@ -5,11 +5,17 @@ use anyhow::anyhow;
 use pyth_sdk::Price;
 use rust_decimal::prelude::FromPrimitive;
 use chrono::DateTime;
+use num_traits::ToPrimitive;
 // internal
 use crate::{RedstonePriceEvent, HermesPriceEvent, CoinbaseMessage, CoinbaseData, UniswapData, WrappedBinancePriceEvent};
 
 pub const PRICE_OBSERVATION_DECIMAL: u32 = 6;
 const PRICE_OBSERVATION_DECIMAL_I32: i32 = - (PRICE_OBSERVATION_DECIMAL as i32);
+
+// ~= const TWO_POW_96: f64 = 2.0_f64.powi(96);
+const TWO_POW_96: f64 = 79_228_162_514_264_337_593_543_950_336.0;
+// ~= const PRICE_OBSERVATION_10_POWI_DECIMAL = 10_f64.powi(PRICE_OBSERVATION_DECIMAL_I32);
+const PRICE_OBSERVATION_10_POWI_DECIMAL: f64 = 1_000_000.0;
 
 pub const PROVIDER_BINANCE: &str = "binance";
 pub const PROVIDER_REDSTONE: &str = "redstone";
@@ -107,22 +113,27 @@ impl TryFrom<CoinbaseData> for PartialPriceObservation {
     type Error = anyhow::Error;
     fn try_from(data: CoinbaseData) -> Result<Self, Self::Error> {
 
+        // On overflows, == f64::INFINITY (or -f64::INFINITY)
+        let scaled = data.price * 1_000_000.0;
+        // 2^53 - maximum exact integer representation in f64
+        const MAX_EXACT_F64_INT: f64 = 9_007_199_254_740_992.0;
+        if scaled.abs() > MAX_EXACT_F64_INT {
+            return Err(anyhow!("Price exceeds exact float representation bounds"));
+        }
+
+        let price_final = scaled.to_i64().ok_or(anyhow!("Price conversion failed (NaN or Infinity)"))?;
+
         Ok(Self {
             feed_id: data.feed_id_normalized,
             provider: PROVIDER_COINBASE.to_string(),
             provider_index: data.provider_index,
             feed_id_provider: data.feed_id,
-            price: data.price,
+            price: price_final,
             decimals: PRICE_OBSERVATION_DECIMAL,
             timestamp: data.timestamp,
         })
     }
 }
-
-// ~= const TWO_POW_96: f64 = 2.0_f64.powi(96);
-const TWO_POW_96: f64 = 79_228_162_514_264_337_593_543_950_336.0;
-// ~= const PRICE_OBSERVATION_10_POWI_DECIMAL = 10_f64.powi(PRICE_OBSERVATION_DECIMAL_I32);
-const PRICE_OBSERVATION_10_POWI_DECIMAL: f64 = 1_000_000.0;
 
 impl TryFrom<UniswapData> for PartialPriceObservation {
     type Error = anyhow::Error;

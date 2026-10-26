@@ -64,11 +64,8 @@ pub async fn fetch_price(
 
                             info!("Coinbase - got ticker: {:?}", ticker);
                             if let Ok(price_f64) = ticker.price.parse::<f64>() {
-                                // TODO: put this in PartialPriceObservation::TryFrom impl
-                                let price = (price_f64 * 1_000_000.0) as i64;
-
                                 let data = CoinbaseData {
-                                    price,
+                                    price: price_f64,
                                     timestamp,
                                     feed_id: ticker.product_id,
                                     feed_id_normalized: price_feed_normalized.to_string(),
