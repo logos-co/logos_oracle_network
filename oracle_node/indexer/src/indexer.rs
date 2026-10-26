@@ -338,7 +338,7 @@ async fn price_feed_worker(
 
                     if obs_count >= cfg.quorum_threshold {
                         // Extract just the integer prices for median calculation
-                        let prices: Vec<i64> = current_round_observations
+                        let mut prices: Vec<i64> = current_round_observations
                             .iter()
                             .filter_map(|obs| {
                                 if obs.decimals == PRICE_OBSERVATION_DECIMAL {
@@ -352,7 +352,8 @@ async fn price_feed_worker(
                             continue;
                         }
 
-                        let attested_median = compute_median(prices);
+                        let attested_median = compute_median(&mut prices);
+                        let confidence = compute_confidence(attested_median, prices.as_slice());
 
                         let feed_id: [u8; 32] = {
                             let r = Sha256::digest(cfg.feed_id.clone());
@@ -365,7 +366,7 @@ async fn price_feed_worker(
                             decimals: PRICE_OBSERVATION_DECIMAL,
                             valid_count: obs_count as u32,
                             round: current_round as i64,
-                            confidence: 0, // TODO: Implement 1.4826 * MAD
+                            confidence
                         };
 
                         info!("[Feed {}] Attested round {}: Price {}, Count {}",
@@ -470,7 +471,7 @@ struct PriceFeedWorkerConfig {
     quorum_threshold: usize, // e.g. N active oracles required
 }
 
-fn compute_median(mut prices: Vec<i64>) -> i64 {
+fn compute_median(prices: &mut [i64]) -> i64 {
     if prices.is_empty() {
         return 0;
     }
@@ -482,6 +483,31 @@ fn compute_median(mut prices: Vec<i64>) -> i64 {
     } else {
         prices[mid]
     }
+}
+
+/// Computes the confidence metric for AttestedPrice confidence field.
+/// Specification: 1.4826 * median(|x_i - median|)
+pub fn compute_confidence(median: i64, observations: &[i64]) -> i64 {
+    if observations.is_empty() {
+        return 0;
+    }
+
+    let mut deviations: Vec<i64> = observations
+        .iter()
+        .map(|&x| (x - median).abs())
+        .collect();
+
+    deviations.sort_unstable();
+
+    let mid = deviations.len() / 2;
+    let mad = if deviations.len() % 2 == 0 {
+        // Standard median: average the two middle deviations
+        (deviations[mid - 1] + deviations[mid]) / 2
+    } else {
+        deviations[mid]
+    };
+
+    (mad * 14826) / 10000
 }
 
 use lb_key_management_system_service::keys::{Ed25519PublicKey, Ed25519Signature};
@@ -517,4 +543,76 @@ fn verify_signature(p_obs: &PriceObservation, pubk_bytes: &[u8; 32]) -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_confidence_standard_case() {
+        let mut observations = vec![
+            2400_000_000,
+            2401_000_000,
+            2402_000_000
+        ];
+
+        let median = compute_median(observations.as_mut_slice());
+        assert_eq!(median, 2401_000_000);
+
+        let confidence = compute_confidence(median, &observations);
+
+        // Deviations: [0, 1_000_000, 1_000_000] -> MAD = 1_000_000
+        assert_eq!(confidence, 1_482_600); // $1.4826
+    }
+
+    #[test]
+    fn test_confidence_flash_crash_outlier() {
+        let mut observations = vec![
+            2400_000_000,
+            2401_000_000,
+            2402_000_000,
+            1_000_000       // The $1 extreme outlier
+        ];
+
+        let median = compute_median(observations.as_mut_slice());
+
+        // Sorted: [1, 2400, 2401, 2402]
+        // Standard Median: (2400 + 2401) / 2 = 2400.5
+        assert_eq!(median, 2400_500_000);
+
+        let confidence = compute_confidence(median, &observations);
+
+        // Deviations from 2400.5:
+        // |2400 - 2400.5| = 0.5
+        // |2401 - 2400.5| = 0.5
+        // |2402 - 2400.5| = 1.5
+        // |1 - 2400.5| = 2399.5
+        // Sorted Deviations: [500_000, 500_000, 1_500_000, 2399_500_000]
+        // MAD (Average of index 1 and 2): (500_000 + 1_500_000) / 2 = 1_000_000
+        // Scaled MAD: 1_000_000 * 1.4826 = 1_482_600
+
+        assert_eq!(confidence, 1_482_600, "Confidence remains tight ($1.48) despite flash crash");
+    }
+
+    #[test]
+    fn test_confidence_sybil_attack_breakdown() {
+        // Attack scenario: 3 malicious nodes report $1, 1 honest node reports $2400
+        let mut observations = vec![
+            1_000_000,
+            1_000_000,
+            2400_000_000,
+            1_000_000
+        ];
+
+        let median = compute_median(observations.as_mut_slice());
+
+        // Documents that the median is captured by the majority
+        assert_eq!(median, 1_000_000, "Median is captured when > 50% are malicious");
+
+        let confidence = compute_confidence(median, &observations);
+
+        // Documents that the confidence score falsely reports perfect agreement
+        assert_eq!(confidence, 0, "Confidence drops to 0 during a successful Sybil attack");
+    }
 }
