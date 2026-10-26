@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use rust_decimal::Decimal;
 
 #[derive(Deserialize, Debug)]
 pub struct CoinbaseMessage {
@@ -17,11 +18,12 @@ pub struct CoinbaseEvent {
 #[derive(Deserialize, Debug)]
 pub struct CoinbaseTicker {
     pub product_id: String,
-    pub price: String,
+    #[serde(with = "rust_decimal::serde::str")]
+    pub price: Decimal,
 }
 
 pub struct CoinbaseData {
-    pub price: f64,
+    pub price: Decimal,
     pub timestamp: i64,
     pub feed_id: String,
     pub feed_id_normalized: String,

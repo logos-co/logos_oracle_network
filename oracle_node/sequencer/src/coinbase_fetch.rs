@@ -63,24 +63,23 @@ pub async fn fetch_price(
                         for ticker in event.tickers {
 
                             info!("Coinbase - got ticker: {:?}", ticker);
-                            if let Ok(price_f64) = ticker.price.parse::<f64>() {
-                                let data = CoinbaseData {
-                                    price: price_f64,
-                                    timestamp,
-                                    feed_id: ticker.product_id,
-                                    feed_id_normalized: price_feed_normalized.to_string(),
-                                    provider_index,
-                                };
 
-                                match PartialPriceObservation::try_from(data) {
-                                    Ok(price_obs) => {
-                                        if let Err(e) = price_update_queue.send(price_obs) {
-                                            error!("Error while sending price update event: {}", e);
-                                        }
-                                    },
-                                    Err(e) => {
-                                        error!("Error while converting event to price update event: {}", e);
+                            let data = CoinbaseData {
+                                price: ticker.price,
+                                timestamp,
+                                feed_id: ticker.product_id,
+                                feed_id_normalized: price_feed_normalized.to_string(),
+                                provider_index,
+                            };
+
+                            match PartialPriceObservation::try_from(data) {
+                                Ok(price_obs) => {
+                                    if let Err(e) = price_update_queue.send(price_obs) {
+                                        error!("Error while sending price update event: {}", e);
                                     }
+                                },
+                                Err(e) => {
+                                    error!("Error while converting event to price update event: {}", e);
                                 }
                             }
                         }

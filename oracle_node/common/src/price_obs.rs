@@ -15,7 +15,8 @@ const PRICE_OBSERVATION_DECIMAL_I32: i32 = - (PRICE_OBSERVATION_DECIMAL as i32);
 // ~= const TWO_POW_96: f64 = 2.0_f64.powi(96);
 const TWO_POW_96: f64 = 79_228_162_514_264_337_593_543_950_336.0;
 // ~= const PRICE_OBSERVATION_10_POWI_DECIMAL = 10_f64.powi(PRICE_OBSERVATION_DECIMAL_I32);
-const PRICE_OBSERVATION_10_POWI_DECIMAL: f64 = 1_000_000.0;
+const PRICE_OBSERVATION_10_POWI_DECIMAL: i64 = 1_000_000;
+const PRICE_OBSERVATION_10_POWI_DECIMAL_F64: f64 = 1_000_000.0;
 
 pub const PROVIDER_BINANCE: &str = "binance";
 pub const PROVIDER_REDSTONE: &str = "redstone";
@@ -113,15 +114,11 @@ impl TryFrom<CoinbaseData> for PartialPriceObservation {
     type Error = anyhow::Error;
     fn try_from(data: CoinbaseData) -> Result<Self, Self::Error> {
 
-        // On overflows, == f64::INFINITY (or -f64::INFINITY)
-        let scaled = data.price * 1_000_000.0;
-        // 2^53 - maximum exact integer representation in f64
-        const MAX_EXACT_F64_INT: f64 = 9_007_199_254_740_992.0;
-        if scaled.abs() > MAX_EXACT_F64_INT {
-            return Err(anyhow!("Price exceeds exact float representation bounds"));
-        }
-
-        let price_final = scaled.to_i64().ok_or(anyhow!("Price conversion failed (NaN or Infinity)"))?;
+        let multiplier = Decimal::new(PRICE_OBSERVATION_10_POWI_DECIMAL, 0);
+        let scaled_price = data.price * multiplier;
+        let price_final = scaled_price
+            .try_into()
+            .map_err(|_| anyhow!("Price overflowed i64 capacity"))?;
 
         Ok(Self {
             feed_id: data.feed_id_normalized,
@@ -157,7 +154,7 @@ impl TryFrom<UniswapData> for PartialPriceObservation {
         };
 
         // Scale to target decimals and round half-up
-        let price_final = (final_price_f64 * PRICE_OBSERVATION_10_POWI_DECIMAL).round() as i64;
+        let price_final = (final_price_f64 * PRICE_OBSERVATION_10_POWI_DECIMAL_F64).round() as i64;
 
         Ok(Self {
             feed_id: data.feed_id_normalized,
