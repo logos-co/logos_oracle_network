@@ -24,6 +24,7 @@ enum SessionEnd {
     QueueClosed,
 }
 
+
 pub async fn fetch_price(
     url: Url,
     provider_index: usize,
