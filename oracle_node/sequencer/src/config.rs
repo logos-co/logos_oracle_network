@@ -7,6 +7,15 @@ use alloy::primitives::Address;
 pub struct UniswapConfig {
     pub contracts: ContractsConfig,
     pub tokens: HashMap<String, Address>,
+    pub pool: PoolConfig,
+}
+
+/// Uniswap v4 pool parameters (part of the PoolKey used to compute the pool id)
+#[derive(Deserialize, Debug)]
+pub struct PoolConfig {
+    /// Pool fee in hundredths of a bip (e.g. 500 = 0.05%)
+    pub fee: u32,
+    pub tick_spacing: i32,
 }
 
 #[derive(Deserialize, Debug)]

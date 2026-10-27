@@ -6,7 +6,15 @@ state_view = "0x7ffe42c4a5deea5b0fec41c94c136cf115597227"
 # From:
 # TODO: where to find the contract address?
 [tokens]
+# Native ETH (Uniswap v4 uses the zero address for native ETH)
+eth = "0x0000000000000000000000000000000000000000"
 # WETH token contract
 weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 # USDC token contract
 usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+
+# Uniswap v4 pool parameters (with hooks = zero address)
+# fee: in hundredths of a bip (500 = 0.05%), tick_spacing must match the pool (500 -> 10, 3000 -> 60)
+[pool]
+fee = 500
+tick_spacing = 10

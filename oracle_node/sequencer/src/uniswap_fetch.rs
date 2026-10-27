@@ -1,5 +1,6 @@
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::time::{sleep, timeout};
 use url::Url;
 use common::{PartialPriceObservation, UniswapData};
 use alloy::{
@@ -10,10 +11,18 @@ use alloy::{
 use alloy::primitives::aliases::{I24, U24};
 use alloy::primitives::{keccak256, B256};
 use alloy::sol_types::SolValue;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use chrono::Utc;
 use tracing::{debug, error, info};
 use crate::config::UniswapConfig;
+
+const INITIAL_RETRY_DELAY: Duration = Duration::from_secs(1);
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
+// Max duration of a single RPC call (reqwest has no timeout by default)
+const RPC_TIMEOUT: Duration = Duration::from_secs(10);
+const POLL_INTERVAL: Duration = Duration::from_secs(12);
+// Uniswap v4 uses Address::ZERO as currency for native ETH (not an ERC20 contract)
+const NATIVE_ETH_DECIMALS: u8 = 18;
 
 sol! {
     #[sol(rpc)]
@@ -69,12 +78,40 @@ pub async fn fetch_price(
     info!("currency 0: {}", currency0.to_string());
     info!("currency 1: {}", currency1.to_string());
 
-    // Fetch the decimals onchain
+    // Fetch the decimals onchain (retry until the RPC is reachable)
     let erc20_0 = IERC20::new(*currency0, provider.clone());
     let erc20_1 = IERC20::new(*currency1, provider.clone());
 
-    let decimals_0 = erc20_0.decimals().call().await?;
-    let decimals_1 = erc20_1.decimals().call().await?;
+    let mut retry_delay = INITIAL_RETRY_DELAY;
+    let (decimals_0, decimals_1) = loop {
+        let res = async {
+            let decimals_0 = if currency0.is_zero() {
+                NATIVE_ETH_DECIMALS
+            } else {
+                timeout(RPC_TIMEOUT, erc20_0.decimals().call())
+                    .await
+                    .context("Timeout while fetching token 0 decimals")??
+            };
+            let decimals_1 = if currency1.is_zero() {
+                NATIVE_ETH_DECIMALS
+            } else {
+                timeout(RPC_TIMEOUT, erc20_1.decimals().call())
+                    .await
+                    .context("Timeout while fetching token 1 decimals")??
+            };
+            anyhow::Ok((decimals_0, decimals_1))
+        }.await;
+
+        match res {
+            Ok(decimals) => break decimals,
+            Err(e) => {
+                error!("Failed to fetch Uniswap token decimals: {:#}", e);
+                info!("Retrying in {} seconds...", retry_delay.as_secs());
+                sleep(retry_delay).await;
+                retry_delay = std::cmp::min(retry_delay * 2, MAX_RETRY_DELAY);
+            }
+        }
+    };
 
     info!("Token 0 Decimals: {}", decimals_0);
     info!("Token 1 Decimals: {}", decimals_1);
@@ -82,16 +119,16 @@ pub async fn fetch_price(
     let pool_key = PoolKey {
         currency0: *currency0,
         currency1: *currency1,
-        fee: U24::from(500), // 0.05%
-        tickSpacing: I24::try_from(10)?,
+        fee: U24::from(cfg.pool.fee),
+        tickSpacing: I24::try_from(cfg.pool.tick_spacing)?,
         hooks: Address::ZERO, // Assuming no hooks for this standard pool
     };
 
     let pool_id: B256 = keccak256(pool_key.abi_encode());
 
     loop {
-        match state_view.getSlot0(pool_id).call().await {
-            Ok(slot0) => {
+        match timeout(RPC_TIMEOUT, state_view.getSlot0(pool_id).call()).await {
+            Ok(Ok(slot0)) => {
                 // `getSlot0` is a view function (does not return Ethereum block timestamp)
                 // so we assign a local Unix ts the moment the call resolve
                 let timestamp_call = Utc::now().timestamp();
@@ -114,6 +151,7 @@ pub async fn fetch_price(
                     Ok(price_obs) => {
                         if let Err(e) = price_update_queue.send(price_obs) {
                             error!("Error while sending price update event: {}", e);
+                            return Err(anyhow!("Uniswap - price update queue closed, stopping price fetch"));
                         }
                     },
                     Err(e) => {
@@ -121,21 +159,20 @@ pub async fn fetch_price(
                     }
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("Failed to fetch Uniswap V4 price: {}", e);
             },
+            Err(_) => {
+                error!("Timeout while fetching Uniswap V4 price ({} seconds)", RPC_TIMEOUT.as_secs());
+            },
         }
-        tokio::time::sleep(Duration::from_secs(12)).await;
+        sleep(POLL_INTERVAL).await;
     }
-
-    Ok(())
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Context;
     use serial_test::serial;
     use crate::test_utils::setup_test_tracing;
 
@@ -153,7 +190,7 @@ mod tests {
         let test_rpc_url = Url::parse(std::env::var("ETHEREUM_RPC_URL")
             .context("ETHEREUM_RPC_URL must be set in .env.test")?.as_str())?;
 
-        let price_feed = "weth/usdc";
+        let price_feed = "eth/usdc";
         let price_feed_normalized = "ETH/USDC";
 
         // uniswap config
@@ -171,7 +208,7 @@ mod tests {
             res
         });
 
-        let f = tokio::time::timeout(TEST_TIMEOUT, async move {
+        let f = timeout(TEST_TIMEOUT, async move {
             let mut counter = 0;
             loop {
                 let price = rx.recv().await;

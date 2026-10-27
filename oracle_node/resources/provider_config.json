@@ -24,7 +24,7 @@
         "binance": "ethusdc",
         "redstone": "",
         "coinbase": "ETH-USDC",
-        "uniswap": "weth/usdc"
+        "uniswap": "eth/usdc"
       }
   }
 }
