@@ -119,9 +119,8 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
         let reader = std::io::BufReader::new(file);
         let cfg = serde_json::from_reader::<_, RegisterContractInfo>(reader)?;
         debug!("oracle register cfg: {:?}", cfg);
-        // let oracle_node_index = sequencer_register(cfg.clone(), oracle_pubk.as_bytes()).await?;
-        // (cfg, oracle_node_index)
-        (cfg, 0)
+        let oracle_node_index = sequencer_register(cfg.clone(), oracle_pubk.as_bytes()).await?;
+        (cfg, oracle_node_index)
     };
 
     let mut set = JoinSet::new();
@@ -345,7 +344,7 @@ fn spawn_fetch_price_tasks(set: &mut JoinSet<Result<(), anyhow::Error>>,
 ) -> anyhow::Result<()> {
 
     let mut providers = args.provider.clone();
-    let provider_index = 0;
+    let mut provider_index = 0;
 
     loop {
 
@@ -464,6 +463,8 @@ fn spawn_fetch_price_tasks(set: &mut JoinSet<Result<(), anyhow::Error>>,
             }
             */
         }
+
+        provider_index += 1;
     }
 
     Ok(())

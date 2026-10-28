@@ -130,15 +130,15 @@ pub async fn fetch_price(
         match timeout(RPC_TIMEOUT, state_view.getSlot0(pool_id).call()).await {
             Ok(Ok(slot0)) => {
                 // `getSlot0` is a view function (does not return Ethereum block timestamp)
-                // so we assign a local Unix ts the moment the call resolve
-                let timestamp_call = Utc::now().timestamp();
+                // so we assign a local Unix ts (milliseconds) the moment the call resolve
+                let timestamp_millis = Utc::now().timestamp_millis();
                 let sqrt_price_x96: U160 = slot0.sqrtPriceX96;
                 info!("sqrt_price_x96: {}", sqrt_price_x96);
                 let sqrt_price_f64 = sqrt_price_x96.to_string().parse::<f64>()?;
 
                 let data = UniswapData {
                     price: sqrt_price_f64,
-                    timestamp: timestamp_call,
+                    timestamp_millis,
                     feed_id: price_feed.to_string(),
                     token_0_decimals: decimals_0,
                     token_1_decimals: decimals_1,

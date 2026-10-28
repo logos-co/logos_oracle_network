@@ -176,8 +176,8 @@ impl Sequencer {
 
                 // Now we have a list of 1 PartialPriceObservation (most recent / per provider)
                 // Compute median & remove
-                let agg = PreAggregator::new(300, 30); // 3% max deviation, 30s max staleness
-                let now = Utc::now().timestamp();
+                let agg = PreAggregator::new(300, Duration::from_secs(30)); // 3% max deviation, 30s max staleness
+                let now = Utc::now().timestamp_millis();
                 let price_latest_ = agg.compute_local_median(price_latest_list.as_slice(), now);
 
                 let price_latest = match price_latest_ {

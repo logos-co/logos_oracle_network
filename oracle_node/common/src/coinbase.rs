@@ -24,7 +24,8 @@ pub struct CoinbaseTicker {
 
 pub struct CoinbaseData {
     pub price: Decimal,
-    pub timestamp: i64,
+    /// Unix timestamp in milliseconds
+    pub timestamp_millis: i64,
     pub feed_id: String,
     pub feed_id_normalized: String,
     pub provider_index: usize,

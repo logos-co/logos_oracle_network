@@ -126,7 +126,7 @@ async fn run_session(
             continue;
         }
 
-        let timestamp = match DateTime::parse_from_rfc3339(&parsed_msg.timestamp) {
+        let timestamp_millis = match DateTime::parse_from_rfc3339(&parsed_msg.timestamp) {
             Ok(dt) => dt.timestamp_millis(),
             Err(e) => {
                 error!("Failed to parse Coinbase timestamp: {}", e);
@@ -142,7 +142,7 @@ async fn run_session(
 
                 let data = CoinbaseData {
                     price: ticker.price,
-                    timestamp,
+                    timestamp_millis,
                     feed_id: ticker.product_id,
                     feed_id_normalized: price_feed_normalized.to_string(),
                     provider_index,

@@ -32,7 +32,8 @@ pub struct PartialPriceObservation {
     pub feed_id_provider: String,
     pub price: i64,
     pub decimals: u32,
-    pub timestamp: i64,
+    /// Unix timestamp in milliseconds
+    pub timestamp_millis: i64,
 }
 
 impl TryFrom<WrappedBinancePriceEvent> for PartialPriceObservation {
@@ -49,7 +50,7 @@ impl TryFrom<WrappedBinancePriceEvent> for PartialPriceObservation {
             feed_id_provider: wevent.event.symbol,
             price: scaled_i64,
             decimals: PRICE_OBSERVATION_DECIMAL,
-            timestamp: wevent.event.event_time.try_into()?,
+            timestamp_millis: wevent.event.event_time.try_into()?,
         })
     }
 }
@@ -70,7 +71,7 @@ impl TryFrom<(String, RedstonePriceEvent)> for PartialPriceObservation {
             feed_id_provider: event.symbol,
             price: scaled_i64,
             decimals: PRICE_OBSERVATION_DECIMAL,
-            timestamp: event.timestamp.try_into()?,
+            timestamp_millis: event.timestamp.try_into()?,
         })
     }
 }
@@ -104,7 +105,7 @@ impl TryFrom<(String, HermesPriceEvent)> for PartialPriceObservation {
             feed_id_provider: price_latest.id,
             price: scaled_pyth_price.price,
             decimals: PRICE_OBSERVATION_DECIMAL,
-            timestamp: price_latest.price.publish_time,
+            timestamp_millis: price_latest.price.publish_time.saturating_mul(1000), // Pyth publish_time is in seconds
         })
     }
 }
@@ -127,7 +128,7 @@ impl TryFrom<CoinbaseData> for PartialPriceObservation {
             feed_id_provider: data.feed_id,
             price: price_final,
             decimals: PRICE_OBSERVATION_DECIMAL,
-            timestamp: data.timestamp,
+            timestamp_millis: data.timestamp_millis,
         })
     }
 }
@@ -163,7 +164,7 @@ impl TryFrom<UniswapData> for PartialPriceObservation {
             feed_id_provider: data.feed_id,
             price: price_final,
             decimals: PRICE_OBSERVATION_DECIMAL,
-            timestamp: data.timestamp,
+            timestamp_millis: data.timestamp_millis,
         })
     }
 }
