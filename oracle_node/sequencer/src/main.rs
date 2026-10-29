@@ -226,9 +226,9 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
     }
     */
 
-    // set.spawn(async move { price_monitor.run(&mut rx).await });
+    set.spawn(async move { price_monitor.run(&mut rx).await });
     // // FIXME: wait_ready ?
-    // set.spawn(async move { sequencer.run(oracle_node_index).await });
+    set.spawn(async move { sequencer.run(oracle_node_index).await });
 
     while let Some(res) = set.join_next().await {
         match res {
