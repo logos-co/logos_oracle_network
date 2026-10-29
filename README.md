@@ -151,7 +151,7 @@ Tips:
   * `git submodule update --init --recursive`
     * Fix submodule update: `cd oracle_node/logos-blockchain/ && git rm --cached .claude/worktrees/wf_d6259406-6a4-9`
 * Run sequencer
-  * Edit `resources/register_contract_config.json` with some contract info
+  * Edit `resources/register_contract_config.toml` with some contract info
     * `oracle_register_program_id`: retrieved when oracle_register contract has been deployed AND initialized
     * `oracle_register_account`: the PDA where oracle_register has been deployed (find when init: `register → 5NTZHn2Q9AzT3GyVZcDkRCSmHz843Z43cxxLu3GUKjbk (PDA)`
     * `oracle_node_funding_account`: an account owned by oracle node that have some LON tokens (for staking)

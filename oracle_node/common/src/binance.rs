@@ -26,3 +26,9 @@ pub struct BinancePriceEvent {
     #[serde(rename = "P")]
     pub price_change_percent: String,
 }
+
+pub struct WrappedBinancePriceEvent {
+    pub feed_id_normalized: String,
+    pub provider_index: usize,
+    pub event: BinancePriceEvent,
+}

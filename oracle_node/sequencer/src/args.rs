@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(about = "LON zone sequencer")]
@@ -70,6 +70,47 @@ pub struct SequencerArgs {
     #[arg(long, default_value = "resources/provider_config.json")]
     pub provider_config: PathBuf,
     
-    #[arg(long, default_value = "resources/register_contract_config.json")]
+    #[arg(long, default_value = "resources/register_contract_config.toml")]
     pub register_contract_config: PathBuf,
+
+    #[arg(long, default_value = "resources/uniswap_config.toml")]
+    pub uniswap_config: Option<PathBuf>,
+
+    /// The ETHEREUM RPC URL (Alchemy?) for Uniswap data (can be passed via CLI or ENV)
+    #[arg(long, env = "ETHEREUM_RPC_URL", hide_env_values = true)]
+    pub ethereum_rpc_url: Option<String>,
+
+    /// A list of providers (for price fetching)
+    #[arg(
+        short,
+        long,
+        value_enum,
+        action = clap::ArgAction::Append,
+        required = true // Need at least one provider
+    )]
+    pub provider: Vec<Provider>,
+
+    #[arg(
+        long,
+        default_value = "ETH/USDC",
+        help = "Price feed - normalized between all price providers (check provider_config.json)"
+    )]
+    pub price_feed_normalized: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
+pub enum Provider {
+    Binance,
+    Coinbase,
+    Uniswap,
+}
+
+impl Provider {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Provider::Binance => "binance",
+            Provider::Coinbase => "coinbase",
+            Provider::Uniswap => "uniswap",
+        }
+    }
 }
