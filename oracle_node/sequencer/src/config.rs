@@ -33,17 +33,30 @@ pub struct TokensConfig {
 mod tests {
     use std::fs;
     use tracing::info;
-    use crate::setup_tracing;
+    use crate::test_utils::setup_test_tracing;
     use super::*;
 
     #[test]
     fn test_reading_uniswap_config() -> anyhow::Result<()> {
 
-        setup_tracing();
+        setup_test_tracing();
 
         let cfg_ = "../resources/uniswap_config.toml";
         let cfg_content = fs::read(cfg_)?;
         let cfg: UniswapConfig = toml::from_slice(cfg_content.as_slice())?;
+        info!("cfg: {:?}", cfg);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reading_register_contract_config() -> anyhow::Result<()> {
+
+        setup_test_tracing();
+
+        let cfg_ = "../resources/register_contract_config.toml";
+        let cfg_content = fs::read(cfg_)?;
+        let cfg: common::RegisterContractInfo = toml::from_slice(cfg_content.as_slice())?;
         info!("cfg: {:?}", cfg);
 
         Ok(())

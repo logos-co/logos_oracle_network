@@ -70,7 +70,7 @@ pub struct SequencerArgs {
     #[arg(long, default_value = "resources/provider_config.json")]
     pub provider_config: PathBuf,
     
-    #[arg(long, default_value = "resources/register_contract_config.json")]
+    #[arg(long, default_value = "resources/register_contract_config.toml")]
     pub register_contract_config: PathBuf,
 
     #[arg(long, default_value = "resources/uniswap_config.toml")]

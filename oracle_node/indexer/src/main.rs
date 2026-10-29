@@ -44,10 +44,9 @@ pub async fn run(args: IndexerArgs) -> anyhow::Result<()> {
 
     // oracle_register contract info
     let oracle_register_cfg = {
-        let file = std::fs::File::open(args.register_contract_config.as_path())
+        let cfg_content = std::fs::read(args.register_contract_config.as_path())
             .context(format!("Reading {}", args.register_contract_config.as_path().display()))?;
-        let reader = std::io::BufReader::new(file);
-        let cfg = serde_json::from_reader::<_, RegisterContractInfo>(reader)?;
+        let cfg: RegisterContractInfo = toml::from_slice(cfg_content.as_slice())?;
         debug!("oracle register contract cfg: {:?}", cfg);
         cfg
     };

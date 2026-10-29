@@ -114,10 +114,9 @@ pub async fn run(args: SequencerArgs) -> anyhow::Result<()> {
 
     // Register (or check it is already registered) to oracle_register contract
     let (oracle_register_cfg, oracle_node_index) = {
-        let file = fs::File::open(args.register_contract_config.as_path())
+        let cfg_content = fs::read(args.register_contract_config.as_path())
             .context(format!("Reading {}", args.register_contract_config.as_path().display()))?;
-        let reader = std::io::BufReader::new(file);
-        let cfg = serde_json::from_reader::<_, RegisterContractInfo>(reader)?;
+        let cfg: RegisterContractInfo = toml::from_slice(cfg_content.as_slice())?;
         debug!("oracle register cfg: {:?}", cfg);
         let oracle_node_index = sequencer_register(cfg.clone(), oracle_pubk.as_bytes()).await?;
         (cfg, oracle_node_index)
