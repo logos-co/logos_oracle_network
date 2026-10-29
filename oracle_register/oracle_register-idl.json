@@ -1,0 +1,196 @@
+{
+  "version": "0.1.0",
+  "name": "oracle_register",
+  "instructions": [
+    {
+      "name": "initialize",
+      "accounts": [
+        {
+          "name": "register",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": "register"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "token_program_id",
+          "type": {
+            "array": [
+              "u32",
+              8
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "register",
+      "accounts": [
+        {
+          "name": "register",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": "register"
+              }
+            ]
+          }
+        },
+        {
+          "name": "from",
+          "writable": false,
+          "signer": true,
+          "init": false
+        },
+        {
+          "name": "to",
+          "writable": true,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "token_def_account",
+          "writable": false,
+          "signer": false,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "oracle_key",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "pda_seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "RegisterState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "token_program_id",
+            "type": {
+              "array": [
+                "u32",
+                8
+              ]
+            }
+          },
+          {
+            "name": "mtree",
+            "type": {
+              "defined": "OracleMerkleTree"
+            }
+          },
+          {
+            "name": "registered",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                0
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "OracleMerkleTree",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "filled_subtrees",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              0
+            ]
+          }
+        },
+        {
+          "name": "zero_hashes",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              0
+            ]
+          }
+        },
+        {
+          "name": "current_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "next_index",
+          "type": "u32"
+        }
+      ]
+    }
+  ]
+}
