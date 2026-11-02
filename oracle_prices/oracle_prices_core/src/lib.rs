@@ -13,6 +13,15 @@ use spel_framework::prelude::*;
 // use borsh::{BorshDeserialize, BorshSerialize};
 
 #[account_type]
+#[derive(BorshSerialize, BorshDeserialize, Default, Debug)]
+pub struct OraclePricesState {
+    // TODO: for now, everybody can initialize a feed
+    //       idea: restrict initialize_feed to registered oracle node
+    // owner: [u8; 32],
+    pub feeds: Vec<[u8; 32]>,
+}
+
+#[account_type]
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct PriceState {
     pub feed_id: [u8; 32], // asset pair identifier, e.g. hash("BTC/USDT")

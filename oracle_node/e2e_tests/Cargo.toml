@@ -1,0 +1,29 @@
+[package]
+name = "e2e_tests"
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { features = ["env-filter"], version = "0.3.23" }
+# LB
+wallet  = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
+spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
+lee = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["test-utils"] }
+common = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
+sequencer_service_rpc = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["client"] }
+# contracts
+oracle_prices_client = { path = "../../oracle_prices_client" }
+
+
+[lints]
+workspace = true

@@ -4,21 +4,12 @@ use spel_framework::prelude::*;
 
 risc0_zkvm::guest::entry!(main);
 
-#[account_type]
-#[derive(BorshSerialize, BorshDeserialize, Default)]
-pub struct OraclePricesState {
-    // TODO: for now, everybody can initialize a feed
-    //       idea: restrict initialize_feed to registered oracle node
-    // owner: [u8; 32],
-    feeds: Vec<[u8; 32]>,
-}
-
 #[lez_program]
 mod oracle_prices {
 
     #[allow(unused_imports)]
     use super::*;
-    use oracle_prices_core::PriceState;
+    use oracle_prices_core::{OraclePricesState, PriceState};
 
     /// Initialize the contract
     #[instruction]
