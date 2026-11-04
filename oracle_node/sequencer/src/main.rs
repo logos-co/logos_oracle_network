@@ -12,6 +12,8 @@ mod config;
 mod test_utils;
 mod pre_aggregator;
 
+mod token_client;
+
 pub mod lon {
     include!(concat!(env!("OUT_DIR"), "/lon.rs"));
 }
@@ -467,4 +469,243 @@ fn spawn_fetch_price_tasks(set: &mut JoinSet<Result<(), anyhow::Error>>,
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::str::FromStr;
+    use lee::{AccountId, PublicTransaction};
+    use lee::program::Program;
+    use lee::public_transaction::{Message, WitnessSet};
+    use lez_common::transaction::LeeTransaction;
+    use oracle_register_client::{OracleRegisterClient, RegisterState, InitializeAccounts};
+    use sequencer_service_rpc::RpcClient;
+    use super::*;
+    use serial_test::serial;
+    use spel_framework::prelude::BorshDeserialize;
+    use crate::test_utils::{init_wallet, send_deploy_tx, setup_test_tracing};
+    use tempfile::tempdir;
+    use wallet::WalletCore;
+    use crate::register_contract::{compute_pda_from_literal, compute_vault_pda};
+    use sequencer_service_rpc::RpcClient as _;
+    use token_core::{TokenDefinition, TokenHolding};
+    use token_client::TokenClient;
+    use crate::token_client::NewFungibleDefinitionAccounts;
+
+    const TOKEN_BIN: &str = "../../../../lez-programs/programs/token/methods/guest/target/riscv32im-risc0-zkvm-elf/docker/token.bin";
+
+    const ORACLE_REGISTER_BIN: &str = "../../oracle_register/methods/guest/target/riscv32im-risc0-zkvm-elf/docker/oracle_register.bin";
+    const ORACLE_PRICES_BIN: &str = "../oracle_prices/methods/guest/target/riscv32im-risc0-zkvm-elf/docker/oracle_prices.bin";
+
+    #[tokio::test]
+    #[serial]
+    async fn test_e2e_1() -> anyhow::Result<()> {
+        setup_test_tracing();
+
+        let wallet_storage_folder = tempdir()?;
+        let wallet_storage_file_path = wallet_storage_folder.path().join("storage.json");
+        std::fs::File::create(wallet_storage_file_path.as_path())?;
+        let mut wallet_core = init_wallet(wallet_storage_file_path)?;
+
+        info!("Wallet core initialized...");
+
+        let (account_id, _chain_index) = wallet_core.create_new_account_public(None);
+        wallet_core
+            .store_persistent_data()?;
+        info!("account id: {}", account_id);
+        info!("chain_index: {}", _chain_index);
+
+        let (lon_def_account_id, _chain_index) = wallet_core.create_new_account_public(None);
+        wallet_core
+            .store_persistent_data()?;
+        info!("lon def account id: {}", lon_def_account_id);
+
+        let (lon_helper_account_id, _chain_index) = wallet_core.create_new_account_public(None);
+        wallet_core
+            .store_persistent_data()?;
+        info!("account id: {}", lon_helper_account_id);
+
+        info!("Reading token bin: {}", TOKEN_BIN);
+
+        let token_program = deploy_contract(&wallet_core, TOKEN_BIN, "token").await?;
+
+        let token_client = TokenClient::new(&wallet_core, token_program.id());
+        init_token_program_for_lon(&token_client, &token_program, lon_def_account_id, lon_helper_account_id).await?;
+
+        // let pg_id_account_id = AccountId::from_str(program_id_to_cli_account(token_program.id()).as_str())?;
+        // info!("pg_id_account_id: {:?}", account_id);
+        // let account_data = wallet_core.get_account_public(pg_id_account_id).await?;
+        // info!("account: {:?}", account_data);
+
+        info!("token program id: {:?}", token_program.id());
+
+        info!("Reading oracle_register bin: {}", ORACLE_REGISTER_BIN);
+        let oracle_register_program = deploy_contract(&wallet_core, ORACLE_REGISTER_BIN, "oracle register").await?;
+        info!("oracle register program id: {:?}", oracle_register_program.id());
+
+        let oracle_register_client = OracleRegisterClient::new(&wallet_core, oracle_register_program.id());
+
+        init_register_program(
+            &oracle_register_client,
+            &token_program,
+            &oracle_register_program,
+            lon_helper_account_id,
+        ).await?;
+
+        // println!("data: {:?}", data);
+
+        Ok(())
+    }
+
+    /*
+    pub fn program_id_to_cli_account(program_id: [u32; 8]) -> String {
+        // 1. Convert the 8 u32 words into 32 bytes (little-endian)
+        let bytes: Vec<u8> = program_id
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect();
+
+        // 2. Encode to Base58 string for the CLI
+        bs58::encode(&bytes).into_string()
+    }
+    */
+
+    async fn deploy_contract(wallet_core: &WalletCore, bin_path: &str, program_name: &str) -> anyhow::Result<Program> {
+
+        let bytecode =
+            fs::read(bin_path).context(format!("While reading {}", bin_path))?;
+        let program =
+            Program::new(bytecode.into()).context("Failed to parse program")?;
+
+        let tx_hash = send_deploy_tx(&wallet_core, &program, program_name, program.elf().to_vec()).await?;
+        info!("tx hash: {}", tx_hash);
+
+        info!("Waiting for transaction (deploy) to end...");
+        tokio::time::sleep(std::time::Duration::from_secs(12)).await;
+
+        Ok(program)
+    }
+
+    async fn init_token_program_for_lon(client: &TokenClient<'_>, token_program: &Program, lon_def: AccountId, lon_holder: AccountId) -> anyhow::Result<()> {
+
+        // TODO
+        // 1. Create token def + mint
+        // 2. Fetch accounts for def / holder
+
+        /*
+        let new_token_instruction = token_core::Instruction::NewFungibleDefinition {
+            name: "LON token".to_string(),
+            total_supply: 21_000,
+        };
+        */
+
+        let accounts = NewFungibleDefinitionAccounts {
+            definition_target_account: lon_def,
+            holding_target_account: lon_holder,
+        };
+        client.new_fungible_definition(accounts, "LON token".to_string(), 21_000, None).await
+            .map_err(|e| anyhow!(e))?;
+
+        info!("Waiting for transaction (new fungible def) to end...");
+        tokio::time::sleep(std::time::Duration::from_secs(12 * 3)).await;
+
+        {
+            let account = client.wallet.sequencer_client
+                .get_account(lon_def).await
+                .map_err(|e| anyhow!("get account: {}", e))?;
+            // println!("account for {:?}: {:?}", register, account);
+            let r = TokenDefinition::try_from_slice(&account.data);
+                // .map_err(|e| anyhow!("deserialize register: {}", e))?;
+            info!("Lon def: {:?}", r);
+        };
+
+        {
+            let account = client.wallet.sequencer_client
+                .get_account(lon_holder).await
+                .map_err(|e| anyhow!("get account: {}", e))?;
+            // println!("account for {:?}: {:?}", register, account);
+            let r = TokenHolding::try_from_slice(&account.data);
+            // .map_err(|e| anyhow!("deserialize register: {}", e))?;
+            info!("Lon holder: {:?}", r);
+        };
+
+        /*
+        let mut account_ids: Vec<AccountId> = vec![
+            accounts.register,
+            accounts.from,
+            accounts.to,
+            accounts.token_def_account,
+        ];
+        let signer_ids: Vec<AccountId> = vec![
+            accounts.from,
+        ];
+        */
+
+        /*
+        let nonces = wallet.get_accounts_nonces(signer_ids.clone()).await
+            .map_err(|e| format!("nonces: {}", e))?;
+        let mut signing_keys = Vec::new();
+        for sid in &signer_ids {
+            let key = wallet
+                .get_account_public_signing_key(*sid)
+                .ok_or_else(|| format!("signing key not found for {}", sid))?;
+            signing_keys.push(key);
+        }
+        let message = Message::try_new(token_program.id(), account_ids, nonces, new_token_instruction)
+            .map_err(|e| format!("message: {:?}", e))?;
+        let witness_set = WitnessSet::for_message(&message, &signing_keys);
+        let tx = PublicTransaction::new(message, witness_set);
+        let response = wallet.sequencer_client.send_transaction(common::transaction::LeeTransaction::Public(tx)).await
+            .map_err(|e| format!("submit: {}", e))?;
+        Ok(hex::encode(response.0))
+            */
+
+        Ok(())
+    }
+
+    async fn init_register_program(client: &OracleRegisterClient<'_>, token_program: &Program, oracle_register_program: &Program, owner: AccountId) -> anyhow::Result<()> {
+        if let Err(e) = client.fetch_register::<RegisterState>().await {
+            info!("Oracle register not initialized, doing it now...");
+
+            // TODO: export literal in oracle_register_client?
+            let register: AccountId = compute_pda_from_literal(&oracle_register_program.id(), "register");
+            println!("register: {} - {:?}", register, register);
+            let init_accounts = InitializeAccounts {
+                register,
+                owner,
+            };
+
+            let r = client.initialize(init_accounts, token_program.id()).await
+                .map_err(|e| anyhow!(e))?;
+            info!("init reg result: {:?}", r);
+
+            info!("Waiting for transaction (initialize) to end...");
+            tokio::time::sleep(std::time::Duration::from_secs(12 + 6)).await;
+
+            // Abort if not cannot fetch the oracle register state
+            {
+                // let account_id = compute_register_pda(&self.program_id);
+                // println!("Fetching register state for account id: {:?}", account_id);
+            }
+            client.fetch_register::<RegisterState>().await
+                .map_err(|e| anyhow!(e))?;
+            /*
+            {
+                let account = wallet.sequencer_client
+                    .get_account(register).await
+                    .map_err(|e| anyhow!("fetch register: {}", e))?;
+                println!("account for {:?}: {:?}", register, account);
+                let r = RegisterState::try_from_slice(&account.data)
+                    .map_err(|e| anyhow!("deserialize register: {}", e))?;
+                println!("r: {:?}", r);
+            }
+            */
+
+        } else {
+            info!("Oracle register contract already initialized...");
+        }
+
+        Ok(())
+    }
 }

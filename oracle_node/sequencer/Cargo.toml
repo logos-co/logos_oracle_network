@@ -68,5 +68,17 @@ toml = "1.1.8"
 dotenvy = "0.15.7"
 serial_test.workspace = true
 
+# only for tests?
+lee = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["test-utils"] }
+lez_common = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", package = "common" }
+sequencer_service_rpc = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["client"] }
+bs58 = "0.5.1"
+token_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
+borsh = { version = "1.5", features = ["derive"] }
+
 [build-dependencies]
 prost-build = "0.14"
+
+[dev-dependencies]
+tempfile.workspace = true
+
