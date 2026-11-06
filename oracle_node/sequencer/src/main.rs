@@ -490,8 +490,9 @@ mod tests {
     use crate::register_contract::{compute_pda_from_literal, compute_vault_pda};
     use sequencer_service_rpc::RpcClient as _;
     use token_core::{TokenDefinition, TokenHolding};
+    use tracing::warn;
     use token_client::TokenClient;
-    use crate::token_client::NewFungibleDefinitionAccounts;
+    use crate::token_client::{NewFungibleDefinitionAccounts, TransferAccounts};
 
     const TOKEN_BIN: &str = "../../../../lez-programs/programs/token/methods/guest/target/riscv32im-risc0-zkvm-elf/docker/token.bin";
 
@@ -521,22 +522,23 @@ mod tests {
             .store_persistent_data()?;
         info!("lon def account id: {}", lon_def_account_id);
 
-        let (lon_helper_account_id, _chain_index) = wallet_core.create_new_account_public(None);
+        let (lon_holder_account_id, _chain_index) = wallet_core.create_new_account_public(None);
         wallet_core
             .store_persistent_data()?;
-        info!("account id: {}", lon_helper_account_id);
+        info!("Lon holder account id: {}", lon_holder_account_id);
+
+        let (lon_sequencer_account_id, _chain_index) = wallet_core.create_new_account_public(None);
+        wallet_core
+            .store_persistent_data()?;
+        info!("Sequencer account id (for staking): {}", lon_sequencer_account_id);
 
         info!("Reading token bin: {}", TOKEN_BIN);
 
         let token_program = deploy_contract(&wallet_core, TOKEN_BIN, "token").await?;
 
         let token_client = TokenClient::new(&wallet_core, token_program.id());
-        init_token_program_for_lon(&token_client, &token_program, lon_def_account_id, lon_helper_account_id).await?;
-
-        // let pg_id_account_id = AccountId::from_str(program_id_to_cli_account(token_program.id()).as_str())?;
-        // info!("pg_id_account_id: {:?}", account_id);
-        // let account_data = wallet_core.get_account_public(pg_id_account_id).await?;
-        // info!("account: {:?}", account_data);
+        init_token_program_for_lon(&token_client, &token_program, &lon_def_account_id, &lon_holder_account_id).await?;
+        transfer_lon_token_to(&token_client, &lon_def_account_id, &lon_holder_account_id, &lon_sequencer_account_id, 1_000).await?;
 
         info!("token program id: {:?}", token_program.id());
 
@@ -550,26 +552,11 @@ mod tests {
             &oracle_register_client,
             &token_program,
             &oracle_register_program,
-            lon_helper_account_id,
+            lon_holder_account_id,
         ).await?;
-
-        // println!("data: {:?}", data);
 
         Ok(())
     }
-
-    /*
-    pub fn program_id_to_cli_account(program_id: [u32; 8]) -> String {
-        // 1. Convert the 8 u32 words into 32 bytes (little-endian)
-        let bytes: Vec<u8> = program_id
-            .iter()
-            .flat_map(|w| w.to_le_bytes())
-            .collect();
-
-        // 2. Encode to Base58 string for the CLI
-        bs58::encode(&bytes).into_string()
-    }
-    */
 
     async fn deploy_contract(wallet_core: &WalletCore, bin_path: &str, program_name: &str) -> anyhow::Result<Program> {
 
@@ -582,37 +569,26 @@ mod tests {
         info!("tx hash: {}", tx_hash);
 
         info!("Waiting for transaction (deploy) to end...");
-        tokio::time::sleep(std::time::Duration::from_secs(12)).await;
+        tokio::time::sleep(Duration::from_secs(12)).await;
 
         Ok(program)
     }
 
-    async fn init_token_program_for_lon(client: &TokenClient<'_>, token_program: &Program, lon_def: AccountId, lon_holder: AccountId) -> anyhow::Result<()> {
-
-        // TODO
-        // 1. Create token def + mint
-        // 2. Fetch accounts for def / holder
-
-        /*
-        let new_token_instruction = token_core::Instruction::NewFungibleDefinition {
-            name: "LON token".to_string(),
-            total_supply: 21_000,
-        };
-        */
+    async fn init_token_program_for_lon(client: &TokenClient<'_>, token_program: &Program, lon_def: &AccountId, lon_holder: &AccountId) -> anyhow::Result<()> {
 
         let accounts = NewFungibleDefinitionAccounts {
-            definition_target_account: lon_def,
-            holding_target_account: lon_holder,
+            definition_target_account: *lon_def,
+            holding_target_account: *lon_holder,
         };
         client.new_fungible_definition(accounts, "LON token".to_string(), 21_000, None).await
             .map_err(|e| anyhow!(e))?;
 
         info!("Waiting for transaction (new fungible def) to end...");
-        tokio::time::sleep(std::time::Duration::from_secs(12 * 3)).await;
+        tokio::time::sleep(Duration::from_secs(12 * 3)).await;
 
         {
             let account = client.wallet.sequencer_client
-                .get_account(lon_def).await
+                .get_account(*lon_def).await
                 .map_err(|e| anyhow!("get account: {}", e))?;
             // println!("account for {:?}: {:?}", register, account);
             let r = TokenDefinition::try_from_slice(&account.data);
@@ -620,9 +596,10 @@ mod tests {
             info!("Lon def: {:?}", r);
         };
 
+        // Use get_token_holding
         {
             let account = client.wallet.sequencer_client
-                .get_account(lon_holder).await
+                .get_account(*lon_holder).await
                 .map_err(|e| anyhow!("get account: {}", e))?;
             // println!("account for {:?}: {:?}", register, account);
             let r = TokenHolding::try_from_slice(&account.data);
@@ -630,36 +607,43 @@ mod tests {
             info!("Lon holder: {:?}", r);
         };
 
-        /*
-        let mut account_ids: Vec<AccountId> = vec![
-            accounts.register,
-            accounts.from,
-            accounts.to,
-            accounts.token_def_account,
-        ];
-        let signer_ids: Vec<AccountId> = vec![
-            accounts.from,
-        ];
-        */
+        Ok(())
+    }
 
-        /*
-        let nonces = wallet.get_accounts_nonces(signer_ids.clone()).await
-            .map_err(|e| format!("nonces: {}", e))?;
-        let mut signing_keys = Vec::new();
-        for sid in &signer_ids {
-            let key = wallet
-                .get_account_public_signing_key(*sid)
-                .ok_or_else(|| format!("signing key not found for {}", sid))?;
-            signing_keys.push(key);
+    async fn get_token_holding(client: &TokenClient<'_>, account: &AccountId) -> anyhow::Result<TokenHolding> {
+        let account = client.wallet.sequencer_client
+            .get_account(*account)
+            .await
+            .map_err(|e| anyhow!("get account: {}", e))?;
+        TokenHolding::try_from_slice(&account.data)
+            .map_err(|e| anyhow!("deserialize token holding: {}", e))
+    }
+
+    async fn transfer_lon_token_to(client: &TokenClient<'_>, lon_def: &AccountId, lon_holder: &AccountId, to: &AccountId, amount: u128) -> anyhow::Result<()> {
+
+        if get_token_holding(&client, &to).await.is_err() {
+            let acc_0 = token_client::InitializeAccountAccounts {
+                definition_account: *lon_def,
+                account_to_initialize: *to,
+            };
+
+            if let Err(e) = client.initialize_account(acc_0).await {
+                warn!("Failed to initialize account: {}", e);
+            }
+
+            info!("Waiting for transaction (init account) to end...");
+            tokio::time::sleep(Duration::from_secs(15)).await;
         }
-        let message = Message::try_new(token_program.id(), account_ids, nonces, new_token_instruction)
-            .map_err(|e| format!("message: {:?}", e))?;
-        let witness_set = WitnessSet::for_message(&message, &signing_keys);
-        let tx = PublicTransaction::new(message, witness_set);
-        let response = wallet.sequencer_client.send_transaction(common::transaction::LeeTransaction::Public(tx)).await
-            .map_err(|e| format!("submit: {}", e))?;
-        Ok(hex::encode(response.0))
-            */
+
+        let acc = TransferAccounts {
+            sender: *lon_holder,
+            recipient: *to,
+        };
+        client.transfer(acc, amount).await
+            .map_err(|e| anyhow!("transfer error: {}", e))?;
+
+        info!("Waiting for transaction (transfer) to end...");
+        tokio::time::sleep(Duration::from_secs(15)).await;
 
         Ok(())
     }
@@ -670,7 +654,7 @@ mod tests {
 
             // TODO: export literal in oracle_register_client?
             let register: AccountId = compute_pda_from_literal(&oracle_register_program.id(), "register");
-            println!("register: {} - {:?}", register, register);
+            info!("register: {} - {:?}", register, register);
             let init_accounts = InitializeAccounts {
                 register,
                 owner,
@@ -681,26 +665,9 @@ mod tests {
             info!("init reg result: {:?}", r);
 
             info!("Waiting for transaction (initialize) to end...");
-            tokio::time::sleep(std::time::Duration::from_secs(12 + 6)).await;
-
-            // Abort if not cannot fetch the oracle register state
-            {
-                // let account_id = compute_register_pda(&self.program_id);
-                // println!("Fetching register state for account id: {:?}", account_id);
-            }
+            tokio::time::sleep(Duration::from_secs(12 + 6)).await;
             client.fetch_register::<RegisterState>().await
                 .map_err(|e| anyhow!(e))?;
-            /*
-            {
-                let account = wallet.sequencer_client
-                    .get_account(register).await
-                    .map_err(|e| anyhow!("fetch register: {}", e))?;
-                println!("account for {:?}: {:?}", register, account);
-                let r = RegisterState::try_from_slice(&account.data)
-                    .map_err(|e| anyhow!("deserialize register: {}", e))?;
-                println!("r: {:?}", r);
-            }
-            */
 
         } else {
             info!("Oracle register contract already initialized...");
