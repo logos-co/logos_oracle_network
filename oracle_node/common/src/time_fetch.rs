@@ -121,6 +121,6 @@ mod tests {
         if let Some(time_info) = oracle_worker_rx.borrow().as_ref() {
             assert_eq!(*time_info, ti);
         }
-
     }
 }
+

@@ -31,6 +31,7 @@ tokio = { default-features = false, features = [
 tracing = { workspace = true }
 tracing-subscriber = { features = ["env-filter"], version = "0.3.23" }
 anyhow = { workspace = true }
+toml = "1.1.8"
 # internal
 common =  { path = "../common" }
 oracle_register_client = { path = "../../oracle_register_client" }

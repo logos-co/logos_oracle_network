@@ -6,5 +6,5 @@ methods/guest/target/
 ui/
 
 generated
-*.json
+# *.json
 .idea

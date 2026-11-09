@@ -10,9 +10,10 @@ use url::Url;
 use prost::Message;
 use tracing::{info, debug, error, warn};
 use bytes::Bytes;
+use chrono::Utc;
 use rs_merkle::algorithms::Keccak256;
 use rs_merkle::{proof_serializers, MerkleTree};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, watch};
 // third-party - logos
 use logos_blockchain_zone_sdk::{
     adapter::NodeHttpClient,
@@ -33,18 +34,57 @@ use lb_key_management_system_service::{
 };
 // internal
 use crate::zone_state::InMemoryZoneState;
-use common::PartialPriceObservation;
+use common::{PartialPriceObservation, PROVIDER_BINANCE, PRICE_OBSERVATION_DECIMAL};
 use crate::lon::PriceObservation;
+use crate::monitor::FeedKey;
+use crate::pre_aggregator::PreAggregator;
 
-pub struct Sequencer {
-    sequencer: ZoneSequencer<NodeHttpClient>,
-    client: SequencerClient,
+/// Handle used by the price publishing task to send inscriptions to the zone.
+pub trait InscriptionPublisher: Clone + Send + Sync + 'static {
+    fn subscribe_ready(&self) -> watch::Receiver<bool>;
+    fn publish(&self, inscription: Inscription) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Abstraction over the zone sequencer (real: [`ZoneSequencer`], tests: mpsc queue)
+pub trait ZoneBackend {
+    type Publisher: InscriptionPublisher;
+    fn publisher(&self) -> Self::Publisher;
+    fn next_event(&mut self) -> impl Future<Output = Event> + Send;
+}
+
+impl InscriptionPublisher for SequencerClient {
+    fn subscribe_ready(&self) -> watch::Receiver<bool> {
+        SequencerClient::subscribe_ready(self)
+    }
+
+    async fn publish(&self, inscription: Inscription) -> anyhow::Result<()> {
+        SequencerClient::publish(self, inscription).await?;
+        Ok(())
+    }
+}
+
+impl ZoneBackend for ZoneSequencer<NodeHttpClient> {
+    type Publisher = SequencerClient;
+
+    fn publisher(&self) -> Self::Publisher {
+        self.client()
+    }
+
+    fn next_event(&mut self) -> impl Future<Output = Event> + Send {
+        ZoneSequencer::next_event(self)
+    }
+}
+
+pub struct Sequencer<Z: ZoneBackend = ZoneSequencer<NodeHttpClient>> {
+    sequencer: Z,
+    client: Z::Publisher,
     state: InMemoryZoneState,
     pub checkpoint_path: PathBuf,
-    price_map: Arc<DashMap<String, VecDeque<PartialPriceObservation>>>,
+    price_map: Arc<DashMap<FeedKey, VecDeque<PartialPriceObservation>>>,
     price_feed: String,
     oracle_channel_keypair: Ed25519Key,
-    merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>> 
+    merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>,
+    provider_count: usize,
 }
 
 impl Sequencer {
@@ -54,11 +94,12 @@ impl Sequencer {
         node_auth_username: Option<String>,
         node_auth_password: Option<String>,
         checkpoint_path: PathBuf,
-        price_map: Arc<DashMap<String, VecDeque<PartialPriceObservation>>>,
+        price_map: Arc<DashMap<FeedKey, VecDeque<PartialPriceObservation>>>,
         price_feed: String,
         oracle_signing_key: Ed25519Key,
         oracle_channel_id: ChannelId,
-        merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>
+        merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>,
+        provider_count: usize,
     ) -> anyhow::Result<Self> {
 
         let checkpoint = None;
@@ -74,18 +115,43 @@ impl Sequencer {
 
         let node = NodeHttpClient::new(CommonHttpClient::new(basic_auth), node_url);
         let sequencer = ZoneSequencer::init(channel_id, signing_key.clone(), node, checkpoint);
-        let client = sequencer.client();
 
-        Ok(Self {
+        Ok(Self::with_backend(
+            sequencer,
+            checkpoint_path,
+            price_map,
+            price_feed,
+            signing_key,
+            merkle_tree_registered_oracle,
+            provider_count,
+        ))
+    }
+}
+
+impl<Z: ZoneBackend> Sequencer<Z> {
+
+    pub(crate) fn with_backend(
+        sequencer: Z,
+        checkpoint_path: PathBuf,
+        price_map: Arc<DashMap<FeedKey, VecDeque<PartialPriceObservation>>>,
+        price_feed: String,
+        oracle_signing_key: Ed25519Key,
+        merkle_tree_registered_oracle: Arc<RwLock<MerkleTree<Keccak256>>>,
+        provider_count: usize,
+    ) -> Self {
+        let client = sequencer.publisher();
+
+        Self {
             sequencer,
             client,
             state: InMemoryZoneState::default(),
             checkpoint_path,
             price_map,
             price_feed,
-            oracle_channel_keypair: signing_key,
+            oracle_channel_keypair: oracle_signing_key,
             merkle_tree_registered_oracle,
-        })
+            provider_count,
+        }
     }
 
     pub async fn run(&mut self, oracle_node_index: u32) -> anyhow::Result<()> {
@@ -98,6 +164,7 @@ impl Sequencer {
         let price_feed = self.price_feed.clone();
         let oracle_channel_keypair = self.oracle_channel_keypair.clone();
         let merkle_tree = self.merkle_tree_registered_oracle.clone();
+        let provider_count = self.provider_count;
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_mins(1));
@@ -124,8 +191,13 @@ impl Sequencer {
 
             loop {
 
+                /*
                 // take prices from price_map
-                let prices = if let Some(mut price_feed_ref_mut) = price_map.get_mut(&price_feed) {
+                let key = FeedKey {
+                    feed_id: price_feed.clone(),
+                    provider_index: 0,
+                };
+                let prices = if let Some(mut price_feed_ref_mut) = price_map.get_mut(&key) {
                     std::mem::take(price_feed_ref_mut.value_mut())
                 } else {
                     continue
@@ -136,6 +208,41 @@ impl Sequencer {
                     // info!("No prices...");
                     // interval.tick().await;
                     continue
+                };
+                */
+
+                let mut price_latest_list = vec![];
+                // Note: Each price_fetch task has a provider_index (starting at 0), then price monitor task
+                // use this index (for FeedKey in DashMap)
+                for i in 0..provider_count {
+                    let key = FeedKey {
+                        feed_id: price_feed.clone(),
+                        provider_index: i,
+                    };
+                    let prices = if let Some(mut price_feed_ref_mut) = price_map.get_mut(&key) {
+                        std::mem::take(price_feed_ref_mut.value_mut())
+                    } else {
+                        continue
+                    };
+
+                    // let Some(price_latest) = prices.back() else {
+                    //     continue
+                    // };
+
+                    if let Some(price_latest) = prices.back() {
+                        price_latest_list.push(price_latest.clone());
+                    }
+                }
+
+                // Now we have a list of 1 PartialPriceObservation (most recent / per provider)
+                // Compute median & remove
+                let agg = PreAggregator::new(300, Duration::from_secs(30)); // 3% max deviation, 30s max staleness
+                let now = Utc::now().timestamp_millis();
+                let price_latest_ = agg.compute_local_median(price_latest_list.as_slice(), now);
+
+                let price_latest = match price_latest_ {
+                    Some(price_latest) => price_latest,
+                    None => continue
                 };
 
                 let obs = {
@@ -151,11 +258,13 @@ impl Sequencer {
                     };
                     
                     let mut obs = PriceObservation {
-                        feed_id: price_latest.feed_id.clone(),
-                        price: price_latest.price,
-                        decimals: price_latest.decimals,
+                        feed_id: price_feed.clone(),
+                        // feed_id: "".to_string(),
+                        price: price_latest,
+                        // price: 0,
+                        decimals: PRICE_OBSERVATION_DECIMAL,
                         round, // TODO: need Logos RPC doc
-                        timestamp: price_latest.timestamp,
+                        timestamp: now,
                         oracle_id: oracle_channel_keypair.public_key().to_bytes().to_vec(),
                         oracle_index: oracle_node_index,
                         signature: vec![],
@@ -163,6 +272,7 @@ impl Sequencer {
                     };
 
                     let mut to_hash: Vec<u8> = vec![];
+                    // SPECDIF: specs requires to hash the field first
                     to_hash.extend(obs.feed_id.as_bytes());
                     to_hash.extend(obs.price.to_le_bytes().as_slice());
                     to_hash.extend(obs.decimals.to_le_bytes().as_slice());
@@ -239,9 +349,9 @@ pub enum SequencerError {
     InscriptionTooLarge(String),
 }
 
-fn handle_event(
+fn handle_event<Z: ZoneBackend>(
     event: Event,
-    _sequencer: &mut ZoneSequencer<NodeHttpClient>,
+    _sequencer: &mut Z,
     _state: &mut InMemoryZoneState,
     checkpoint_path: &Path,
 ) -> anyhow::Result<()> {
@@ -265,4 +375,109 @@ fn save_checkpoint(path: &Path, checkpoint: &SequencerCheckpoint) -> anyhow::Res
     fs::write(path, data)
         .context(format!("Failed to write checkpoint to {}", path.display()))?;
     Ok(())
+}
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+    use rs_merkle::Hasher;
+
+    /// Publisher sending inscriptions into a mpsc queue (instead of the LEZ node)
+    #[derive(Clone)]
+    pub(crate) struct MpscPublisher {
+        tx: mpsc::UnboundedSender<Inscription>,
+        ready_rx: watch::Receiver<bool>,
+    }
+
+    impl InscriptionPublisher for MpscPublisher {
+        fn subscribe_ready(&self) -> watch::Receiver<bool> {
+            self.ready_rx.clone()
+        }
+
+        async fn publish(&self, inscription: Inscription) -> anyhow::Result<()> {
+            self.tx.send(inscription)?;
+            Ok(())
+        }
+    }
+
+    /// Zone backend for unit tests: published inscriptions are received via the returned receiver
+    pub(crate) struct MpscZone {
+        publisher: MpscPublisher,
+        _ready_tx: watch::Sender<bool>,
+    }
+
+    impl MpscZone {
+        pub(crate) fn new() -> (Self, mpsc::UnboundedReceiver<Inscription>) {
+            let (tx, rx) = mpsc::unbounded_channel();
+            let (ready_tx, ready_rx) = watch::channel(true);
+            let zone = Self {
+                publisher: MpscPublisher { tx, ready_rx },
+                _ready_tx: ready_tx,
+            };
+            (zone, rx)
+        }
+    }
+
+    impl ZoneBackend for MpscZone {
+        type Publisher = MpscPublisher;
+
+        fn publisher(&self) -> Self::Publisher {
+            self.publisher.clone()
+        }
+
+        async fn next_event(&mut self) -> Event {
+            // No zone events in unit tests
+            std::future::pending().await
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sequencer_publish_inscription() {
+        let feed_id = "ETH/USD".to_string();
+        let price = 3_000_000_000i64;
+
+        let price_map = Arc::new(DashMap::new());
+        price_map.insert(
+            FeedKey { feed_id: feed_id.clone(), provider_index: 0 },
+            VecDeque::from([PartialPriceObservation {
+                feed_id: feed_id.clone(),
+                provider: "test".to_string(),
+                provider_index: 0,
+                feed_id_provider: feed_id.clone(),
+                price,
+                decimals: PRICE_OBSERVATION_DECIMAL,
+                timestamp_millis: Utc::now().timestamp_millis(),
+            }]),
+        );
+
+        let signing_key = Ed25519Key::from_bytes(&[7u8; 32]);
+        let leaf = Keccak256::hash(signing_key.public_key().to_bytes().as_slice());
+        let merkle_tree = Arc::new(RwLock::new(MerkleTree::<Keccak256>::from_leaves(&[leaf])));
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let (zone, mut rx) = MpscZone::new();
+        let mut sequencer = Sequencer::with_backend(
+            zone,
+            tmp_dir.path().join("checkpoint.json"),
+            price_map,
+            feed_id.clone(),
+            signing_key.clone(),
+            merkle_tree,
+            1,
+        );
+
+        tokio::spawn(async move { sequencer.run(0).await });
+
+        let inscription = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("timeout waiting for inscription")
+            .expect("channel closed");
+
+        let obs = PriceObservation::decode(inscription.as_ref()).unwrap();
+        assert_eq!(obs.feed_id, feed_id);
+        assert_eq!(obs.price, price);
+        assert_eq!(obs.oracle_index, 0);
+        assert_eq!(obs.oracle_id, signing_key.public_key().to_bytes().to_vec());
+        assert!(!obs.signature.is_empty());
+    }
 }

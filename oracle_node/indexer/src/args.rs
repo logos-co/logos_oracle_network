@@ -32,7 +32,7 @@ pub struct IndexerArgs {
     #[arg(long, env = "INDEXER_NODE_AUTH_PASSWORD")]
     pub node_auth_password: Option<String>,
 
-    #[arg(long, default_value = "resources/register_contract_config.json")]
+    #[arg(long, default_value = "resources/register_contract_config.toml")]
     pub register_contract_config: PathBuf,
 
     #[arg(long, default_value = "resources/prices_contract_config.json")]

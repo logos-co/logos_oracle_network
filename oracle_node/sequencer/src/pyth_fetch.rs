@@ -57,6 +57,8 @@ pub async fn fetch_price(
                     match serde_json::from_str::<HermesPriceEvent>(&message.data) {
                         Ok(update_event) => {
 
+                            unimplemented!()
+                            /*
                             match PartialPriceObservation::try_from(
                                 (price_id_normalized.to_string(), update_event)) {
                                 Ok(price_obs) => {
@@ -68,6 +70,7 @@ pub async fn fetch_price(
                                     error!("Error while converting event to price update event: {}", e);
                                 }
                             }
+                            */
                         },
                         Err(err) => {
                             error!("Failed to parse Pyth JSON: {}\nRaw data: {}", err, message.data);

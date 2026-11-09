@@ -93,13 +93,13 @@ pub async fn sequencer_register(
     Ok(oracle_node_mtree_index as u32)
 }
 
-const ORACLE_REGISER_LITERAL: &str = "oracle_register__";
+const ORACLE_REGISTER_LITERAL: &str = "oracle_register__";
 
 /// Raw seed bytes for the vault PDA, for inclusion in a `Register` instruction's `pda_seeds`.
 /// Vault seed: [literal("oracle_register__"), arg("create_key")]
 pub fn vault_pda_seed_bytes(create_key: &[u8; 32]) -> [u8; 32] {
 
-    let tag = seed_from_str(ORACLE_REGISER_LITERAL);
+    let tag = seed_from_str(ORACLE_REGISTER_LITERAL);
     let mut hasher = Sha256::new();
     hasher.update(tag);
     hasher.update(create_key);
@@ -108,8 +108,13 @@ pub fn vault_pda_seed_bytes(create_key: &[u8; 32]) -> [u8; 32] {
 
 /// PDA for the multisig vault account.
 pub fn compute_vault_pda(program_id: &ProgramId, create_key: &[u8; 32]) -> AccountId {
-    let tag = seed_from_str(ORACLE_REGISER_LITERAL);
+    let tag = seed_from_str(ORACLE_REGISTER_LITERAL);
     compute_pda_multi(program_id, &[&tag as &dyn ToSeed, create_key])
+}
+
+pub fn compute_pda_from_literal(program_id: &ProgramId, literal: &str) -> AccountId {
+    let tag = seed_from_str(literal);
+    compute_pda_multi(program_id, &[&tag as &dyn ToSeed])
 }
 
 // TODO / FIXME: duplicated code (see indexer)

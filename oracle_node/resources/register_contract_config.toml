@@ -1,0 +1,18 @@
+# oracle_register contract configuration (used by the sequencer to register / stake an oracle node)
+
+# Program id of the deployed oracle_register contract (hex, 32 bytes), retrieved once the contract is deployed AND initialized
+oracle_register_program_id = "17a40fe6d923bab0ac82e2e95cf96f9ab698be56a2a83352f449c07cb3d652a5"
+# Account (PDA) holding the oracle_register state (base58), printed at init: `register → <account> (PDA)`
+oracle_register_account = "5NTZHn2Q9AzT3GyVZcDkRCSmHz843Z43cxxLu3GUKjbk"
+# Account owned by the oracle node holding some LON tokens, used to fund the stake (base58)
+oracle_node_funding_account = "EJg2dB2YWZTQjbBvz3VEhEM2mgvXNRrZ9CkXM6nwXugb"
+# Account holding the LON token definition (base58)
+token_definition_account = "3R413ZmQ7yETsNCEVHmVD4ju9z2GP9HLTEMQb3Ps85rx"
+
+# Unused - kept for reference (the stake vault PDA & its seed are now derived from the oracle node id at runtime)
+# Oracle node id (hex, 32 bytes)
+# oracle_node_id = "0000000000000000000000000000000000000000000000000000000000000001"
+# Stake vault account (PDA) receiving the staked tokens (base58)
+# oracle_register_to = "7gCcxi5ZbjXH3RXaiRHzT4Bs9EjHA5cY83nPZpTMYXCZ"
+# Seed of the stake vault PDA (hex, 32 bytes)
+# oracle_register_to_pda_seed = "d546e7902066da243a0efa4e4d716b7f78356fa6632adb563fb74ce0a0366d73"
