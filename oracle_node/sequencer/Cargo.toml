@@ -12,6 +12,10 @@ version.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Enable tests requiring a running Logos blockchain (e.g. started via docker compose)
+e2e_lbc = []
+
 [dependencies]
 anyhow = "1.0.102"
 tokio = { default-features = false, features = [
@@ -23,6 +27,7 @@ tokio = { default-features = false, features = [
     "signal",
     "sync",
 ], version = "1" }
+tokio-util.workspace = true
 url.workspace = true
 rand.workspace = true
 serde.workspace = true

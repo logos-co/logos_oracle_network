@@ -3,7 +3,7 @@ use serde::Deserialize;
 use alloy::primitives::Address;
 // use toml::from_slice;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct UniswapConfig {
     pub contracts: ContractsConfig,
     pub tokens: HashMap<String, Address>,
@@ -11,19 +11,19 @@ pub struct UniswapConfig {
 }
 
 /// Uniswap v4 pool parameters (part of the PoolKey used to compute the pool id)
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct PoolConfig {
     /// Pool fee in hundredths of a bip (e.g. 500 = 0.05%)
     pub fee: u32,
     pub tick_spacing: i32,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct ContractsConfig {
     pub state_view: Address,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct TokensConfig {
     pub weth: Address,
     pub usdc: Address,

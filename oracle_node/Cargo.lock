@@ -10116,6 +10116,7 @@ dependencies = [
  "token_core",
  "tokio",
  "tokio-tungstenite 0.30.0",
+ "tokio-util",
  "toml 1.1.8+spec-1.1.0",
  "tracing",
  "tracing-subscriber 0.3.23",
