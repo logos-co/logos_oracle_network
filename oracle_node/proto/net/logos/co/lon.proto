@@ -21,6 +21,7 @@ message PriceObservation {
   bytes  membership_proof  = 9;  // Merkle inclusion proof of oracle_id under the LEZ membership root (outside signature scope)
 }
 
+/*
 // SPECDIF: decimals is u32, spec defines it as i32 -- feed_id is bytes, specs defines it as string
 message AttestedPrice {
   bytes  feed_id      = 1;  // asset pair identifier, e.g. sha256("BTC/USDT")
@@ -29,4 +30,39 @@ message AttestedPrice {
   uint32 valid_count  = 4;  // number of observations aggregated in this round
   int64  round        = 5;  // round identifier, in Bedrock block-height terms
   int64  confidence   = 6;  // OPTIONAL: dispersion of observations, scaled like `price`
+}
+*/
+
+enum AttestationStatus {
+  PENDING   = 0;  // written by the proposer, dispute window open
+  FINAL     = 1;  // window passed with no successful dispute, or the winning set confirmed the written value
+  CORRECTED = 2;  // replaced by the median of the set that won a dispute
+  VOIDED    = 3;  // the proposer's committed set did not hold N valid observations; the round carries no price
+}
+
+message AttestationSubmission {
+  int64  round                      = 1;  // round identifier
+  int64  price                      = 2;  // attested median, real value = price * 10^(-decimals of the feed)
+  int64  confidence                 = 3;  // dispersion of the N observations, scaled like `price`
+  bytes  set_hash                   = 4;  // commitment to the N aggregated observations, see Raising a dispute
+  bytes  proposer_oracle_id         = 5;  // the writer's oracle_id; its LEZ account MUST authorize the TX
+  bytes  proposer_channel_id        = 6;  // the writer's registered channel, needed to rebuild its leaf
+  uint64 proposer_leaf_index        = 7;  // index of the writer's leaf under root_cycle
+  bytes  proposer_membership_proof  = 8;  // Merkle proof of the writer's leaf under root_cycle
+
+  // SPECDIF
+  uint32  decimals     = 9;  // number of decimal places in `price`
+}
+
+// SPECDIF: decimals is u32, spec defines it as i32 -- feed_id is bytes, specs defines it as string
+message AttestedPrice {                    // stored by the LEZ contract
+  bytes feed_id             = 1;  // asset pair identifier, e.g. "BTC/USDT"
+  int64  price              = 2;  // attested median, replaced on CORRECTED
+  uint32  decimals           = 3;  // number of decimal places in `price`
+  int64  round              = 4;  // round identifier
+  int64  confidence         = 5;  // dispersion of the N observations, replaced if a dispute recomputes another value
+  AttestationStatus status  = 6;  // set only by the contract; a new write is always PENDING
+  bytes  set_hash           = 7;  // from the submission
+  bytes  proposer_id        = 8;  // oracle_id of the writer, set by the contract
+  int64  written_at         = 9;  // LEZ block B that included the submission, set by the contract
 }
