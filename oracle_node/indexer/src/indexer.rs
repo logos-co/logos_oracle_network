@@ -40,6 +40,8 @@ pub struct Indexer {
     feed_workers: HashMap<String, mpsc::Sender<(ChannelId, PriceObservation)>>,
     pc_info: PricesContractInfo,
     merkle_tree_roots: Arc<RwLock<VecDeque<TreeSnapshot>>>,
+    /// Successfully published attested prices are also sent here (if any)
+    attested_tx: Option<mpsc::UnboundedSender<AttestedPrice>>,
 }
 
 impl Indexer {
@@ -52,6 +54,7 @@ impl Indexer {
         channels_rx: watch::Receiver<HashSet<ChannelId>>,
         pc_info: PricesContractInfo,
         merkle_tree_roots: Arc<RwLock<VecDeque<TreeSnapshot>>>,
+        attested_tx: Option<mpsc::UnboundedSender<AttestedPrice>>,
     ) -> anyhow::Result<Self> {
         let node_url = Url::parse(node_endpoint)?;
         Ok(Self {
@@ -64,7 +67,8 @@ impl Indexer {
             // TODO: maybe create feed workers for some known price id
             feed_workers: HashMap::new(),
             pc_info,
-            merkle_tree_roots
+            merkle_tree_roots,
+            attested_tx,
         })
     }
 
@@ -151,8 +155,9 @@ impl Indexer {
                                 feed_id, round_length: 2, quorum_threshold: 1 };
                             let pc_info = self.pc_info.clone();
                             let merkle_tree_roots = self.merkle_tree_roots.clone();
+                            let attested_tx = self.attested_tx.clone();
                             let _worker_handle = tokio::spawn(async move {
-                                price_feed_worker(cfg, channels_rx, worker_rx, time_info_rx, pc_info, merkle_tree_roots).await
+                                price_feed_worker(cfg, channels_rx, worker_rx, time_info_rx, pc_info, merkle_tree_roots, attested_tx).await
                             });
                             entry.insert(worker_tx.clone());
                             worker_tx
@@ -172,8 +177,9 @@ impl Indexer {
                             feed_id, round_length: 2, quorum_threshold: 1 };
                         let pc_info = self.pc_info.clone();
                         let merkle_tree_roots = self.merkle_tree_roots.clone();
+                        let attested_tx = self.attested_tx.clone();
                         let _worker_handle = tokio::spawn(async move {
-                            price_feed_worker(cfg, channels_rx, worker_rx, time_info_rx, pc_info, merkle_tree_roots).await
+                            price_feed_worker(cfg, channels_rx, worker_rx, time_info_rx, pc_info, merkle_tree_roots, attested_tx).await
                         });
                         self.feed_workers.insert(price_obs.feed_id.clone(), tx.clone());
                         // Retry on the send on the newly created feed_worker
@@ -296,7 +302,8 @@ async fn price_feed_worker(
     mut price_obs_rx: mpsc::Receiver<(ChannelId, PriceObservation)>,
     mut time_rx: watch::Receiver<Option<TimeInfo>>,
     pc_info: PricesContractInfo,
-    roots: Arc<RwLock<VecDeque<TreeSnapshot>>>
+    roots: Arc<RwLock<VecDeque<TreeSnapshot>>>,
+    attested_tx: Option<mpsc::UnboundedSender<AttestedPrice>>,
 ) {
     info!("Started feed worker for {}", cfg.feed_id);
 
@@ -371,10 +378,16 @@ async fn price_feed_worker(
                         info!("[Feed {}] Attested round {}: Price {}, Count {}",
                               cfg.feed_id, current_round, attested_price.price, obs_count);
 
-                        if let Err(e) = publish_attested_price(&pc_info, attested_price).await {
+                        if let Err(e) = publish_attested_price(&pc_info, attested_price.clone()).await {
                             error!("Error while publishing attested price: {}", e);
                         } else {
                             info!("Successfully published attested price to oracle pices contract :-) :-D !!!");
+                            if let Some(attested_tx) = &attested_tx {
+                                if attested_tx.send(attested_price).is_err() {
+                                    // Receiver dropped -> nobody is listening anymore, not an error
+                                    debug!("Attested price receiver dropped");
+                                }
+                            }
                         }
 
                     } else {

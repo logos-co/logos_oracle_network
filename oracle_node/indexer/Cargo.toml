@@ -28,6 +28,7 @@ tokio = { default-features = false, features = [
     "sync",
     "time",
 ], version = "1.53.1" }
+tokio-util.workspace = true
 tracing = { workspace = true }
 tracing-subscriber = { features = ["env-filter"], version = "0.3.23" }
 anyhow = { workspace = true }
