@@ -52,8 +52,11 @@ message AttestationSubmission {
 
   // SPECDIF
   uint32  decimals     = 9;  // number of decimal places in `price`
+  // SPECDIF
+  bytes  feed_id       = 10; // asset pair identifier, e.g. sha256("BTC/USDT") (32 bytes)
 }
 
+/*
 // SPECDIF: decimals is u32, spec defines it as i32 -- feed_id is bytes, specs defines it as string
 message AttestedPrice {                    // stored by the LEZ contract
   bytes feed_id             = 1;  // asset pair identifier, e.g. "BTC/USDT"
@@ -66,3 +69,4 @@ message AttestedPrice {                    // stored by the LEZ contract
   bytes  proposer_id        = 8;  // oracle_id of the writer, set by the contract
   int64  written_at         = 9;  // LEZ block B that included the submission, set by the contract
 }
+*/
