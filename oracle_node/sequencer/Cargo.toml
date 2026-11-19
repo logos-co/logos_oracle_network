@@ -88,4 +88,5 @@ prost-build = "0.14"
 [dev-dependencies]
 tempfile.workspace = true
 oracle_prices_core = { path = "../../oracle_prices/oracle_prices_core" }
+clock_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
 

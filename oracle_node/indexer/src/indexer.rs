@@ -23,7 +23,7 @@ use logos_blockchain_zone_sdk::indexer::ZoneIndexer;
 use common::{PricesContractInfo, RegisterContractInfo, TimeInfo, PRICE_OBSERVATION_DECIMAL};
 use crate::indexer::lon::{AttestationSubmission, PriceObservation};
 use crate::mtree::TreeSnapshot;
-use crate::prices_contract::submit_attestation;
+use crate::prices_contract::{finalize_attestation, submit_attestation};
 use crate::register_contract::fetch_oracle_register_state;
 
 pub mod lon {
@@ -313,7 +313,7 @@ async fn price_feed_worker(
     // State for the current round
     let mut current_round = 0;
     let mut current_round_observations: Vec<PriceObservation> = Vec::new();
-    // Last submission written as PENDING, re-submitted on next round to make it FINAL
+    // Last submission written as PENDING, finalized on next round
     let mut pending_submission: Option<AttestationSubmission> = None;
 
     // Initialize current_round based on the current slot
@@ -341,13 +341,15 @@ async fn price_feed_worker(
 
                     // info!("[price_feed_worker] new round...");
 
-                    // Dispute window is over -> re-submit previous attestation (contract will set it as FINAL)
+                    // Dispute window should be over -> finalize previous attestation
+                    // Note: if this fails, the contract still finalizes it on the next submit_attestation
+                    //       (if its dispute window is over)
                     if let Some(submission) = pending_submission.take() {
-                        if let Err(e) = submit_attestation(&pc_info, &submission).await {
+                        if let Err(e) = finalize_attestation(&pc_info, &submission.feed_id, submission.round).await {
                             error!("[Feed {}] Error while finalizing attestation for round {}: {}",
                                    cfg.feed_id, submission.round, e);
                         } else {
-                            info!("[Feed {}] Finalized attestation for round {}", cfg.feed_id, submission.round);
+                            info!("[Feed {}] Sent finalize attestation for round {}", cfg.feed_id, submission.round);
                         }
                     }
 

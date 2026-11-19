@@ -4576,6 +4576,7 @@ version = "0.2.1"
 dependencies = [
  "anyhow",
  "clap",
+ "clock_core",
  "common 0.2.1",
  "futures",
  "hex",
@@ -10110,6 +10111,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
+ "clock_core",
  "common 0.1.0",
  "common 0.2.1",
  "dashmap",

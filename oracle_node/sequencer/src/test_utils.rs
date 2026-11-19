@@ -104,3 +104,12 @@ pub(crate) async fn wait_for_tx(wallet_core: &WalletCore, tx_hash: &str, max_blo
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 }
+
+/// Wait for the sequencer to reach block id `block_id`
+#[cfg(test)]
+pub(crate) async fn wait_for_block(wallet_core: &WalletCore, block_id: u64) -> anyhow::Result<()> {
+    while wallet_core.sequencer_client.get_last_block_id().await? < block_id {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    Ok(())
+}

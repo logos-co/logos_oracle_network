@@ -2,6 +2,7 @@
 mod oracle_prices_client;
 
 pub use oracle_prices_client::{
-    compute_feed_price_pda, compute_oracle_prices_account_pda, InitializeAccounts,
-    InitializeFeedAccounts, OraclePricesClient, OraclePricesInstruction, SubmitAttestationAccounts,
+    compute_feed_price_pda, compute_oracle_prices_account_pda, FinalizeAttestationAccounts,
+    InitializeAccounts, InitializeFeedAccounts, OraclePricesClient, OraclePricesInstruction,
+    SubmitAttestationAccounts,
 };

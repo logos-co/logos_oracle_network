@@ -60,6 +60,10 @@ pub enum OraclePricesInstruction {
         proposer_membership_proof: Vec<u8>,
         decimals: u32,
     },
+    FinalizeAttestation {
+        feed_id: [u8; 32],
+        round: u64,
+    },
 }
 
 pub struct InitializeAccounts {
@@ -73,6 +77,12 @@ pub struct InitializeFeedAccounts {
 
 pub struct SubmitAttestationAccounts {
     pub feed_price: AccountId,
+    pub clock: AccountId,
+}
+
+pub struct FinalizeAttestationAccounts {
+    pub feed_price: AccountId,
+    pub clock: AccountId,
 }
 
 pub struct OraclePricesClient<'w> {
@@ -173,6 +183,41 @@ impl<'w> OraclePricesClient<'w> {
         };
         let mut account_ids: Vec<AccountId> = vec![
             accounts.feed_price,
+            accounts.clock,
+        ];
+        let signer_ids: Vec<AccountId> = vec![
+        ];
+        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+            .map_err(|e| format!("nonces: {}", e))?;
+        let mut signing_keys = Vec::new();
+        for sid in &signer_ids {
+            let key = self.wallet
+                .get_account_public_signing_key(*sid)
+                .ok_or_else(|| format!("signing key not found for {}", sid))?;
+            signing_keys.push(key);
+        }
+        let message = Message::try_new(self.program_id, account_ids, nonces, instruction)
+            .map_err(|e| format!("message: {:?}", e))?;
+        let witness_set = WitnessSet::for_message(&message, &signing_keys);
+        let tx = PublicTransaction::new(message, witness_set);
+        let response = self.wallet.sequencer_client.send_transaction(common::transaction::LeeTransaction::Public(tx)).await
+            .map_err(|e| format!("submit: {}", e))?;
+        Ok(hex::encode(response.0))
+    }
+
+    pub async fn finalize_attestation(
+        &self,
+        accounts: FinalizeAttestationAccounts,
+        feed_id: [u8; 32],
+        round: u64,
+    ) -> Result<String, String> {
+        let instruction = OraclePricesInstruction::FinalizeAttestation {
+            feed_id,
+            round,
+        };
+        let mut account_ids: Vec<AccountId> = vec![
+            accounts.feed_price,
+            accounts.clock,
         ];
         let signer_ids: Vec<AccountId> = vec![
         ];

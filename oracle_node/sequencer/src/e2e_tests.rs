@@ -7,13 +7,15 @@ use lez_common::transaction::LeeTransaction;
 use oracle_register_client::{OracleRegisterClient, RegisterState, InitializeAccounts};
 use oracle_prices_client::{compute_feed_price_pda, compute_oracle_prices_account_pda,
                            InitializeAccounts as OraclePricesInitializeAccounts,
-                           InitializeFeedAccounts, OraclePricesClient, SubmitAttestationAccounts};
-use oracle_prices_core::{AttestationStatus, AttestedPrice};
+                           InitializeFeedAccounts, OraclePricesClient, SubmitAttestationAccounts,
+                           FinalizeAttestationAccounts};
+use oracle_prices_core::{AttestationStatus, FeedState, DISPUTE_WINDOW_BLOCKS};
+use clock_core::CLOCK_01_PROGRAM_ACCOUNT_ID;
 use sequencer_service_rpc::RpcClient;
 use super::*;
 use serial_test::serial;
 use spel_framework::prelude::BorshDeserialize;
-use crate::test_utils::{init_wallet, send_deploy_tx, setup_test_tracing, wait_for_tx};
+use crate::test_utils::{init_wallet, send_deploy_tx, setup_test_tracing, wait_for_block, wait_for_tx};
 use tempfile::tempdir;
 use wallet::WalletCore;
 use crate::register_contract::{compute_pda_from_literal, compute_vault_pda};
@@ -74,8 +76,9 @@ async fn test_e2e_oracle_prices() -> anyhow::Result<()> {
     let set_hash: [u8; 32] = [3; 32];
     let proposer_oracle_id: [u8; 32] = [1; 32];
     let decimals = common::PRICE_OBSERVATION_DECIMAL;
+    let block_before = wallet_core.sequencer_client.get_last_block_id().await?;
     let tx_hash = client.submit_attestation(
-        SubmitAttestationAccounts { feed_price },
+        SubmitAttestationAccounts { feed_price, clock: CLOCK_01_PROGRAM_ACCOUNT_ID },
         feed_id,
         round,
         price,
@@ -90,10 +93,13 @@ async fn test_e2e_oracle_prices() -> anyhow::Result<()> {
         .map_err(|e| anyhow!(e))?;
     info!("Waiting for transaction (submit attestation) to end...");
     wait_for_tx(&wallet_core, &tx_hash, 3).await?;
+    let block_after = wallet_core.sequencer_client.get_last_block_id().await?;
 
-    let attested_price: AttestedPrice = client.fetch_feed_price(&feed_id).await
+    let feed_state: FeedState = client.fetch_feed_price(&feed_id).await
         .map_err(|e| anyhow!(e))?;
-    info!("attested price: {:?}", attested_price);
+    info!("feed state: {:?}", feed_state);
+    assert!(feed_state.last_final.is_none());
+    let attested_price = feed_state.pending.ok_or(anyhow!("No pending attestation"))?;
     assert_eq!(attested_price.feed_id, feed_id);
     assert_eq!(attested_price.price, price);
     assert_eq!(attested_price.decimals, decimals);
@@ -102,7 +108,34 @@ async fn test_e2e_oracle_prices() -> anyhow::Result<()> {
     assert_eq!(attested_price.status, AttestationStatus::Pending);
     assert_eq!(attested_price.set_hash, set_hash);
     assert_eq!(attested_price.proposer_id, proposer_oracle_id);
-    assert_eq!(attested_price.written_at, 0); // TODO: block id once the contract reads the clock account
+    // written_at is the block id read by the contract from the clock account
+    assert!(
+        (block_before..=block_after).contains(&attested_price.written_at),
+        "written_at {} not in [{}, {}]", attested_price.written_at, block_before, block_after
+    );
+
+    // Finalize once the dispute window is over
+    // Note: an early finalize is rejected by the contract (tested in oracle_prices_core unit tests)
+    info!("Waiting for dispute window to end...");
+    wait_for_block(&wallet_core, attested_price.written_at + DISPUTE_WINDOW_BLOCKS).await?;
+    let tx_hash = client.finalize_attestation(
+        FinalizeAttestationAccounts { feed_price, clock: CLOCK_01_PROGRAM_ACCOUNT_ID },
+        feed_id,
+        round,
+    ).await
+        .map_err(|e| anyhow!(e))?;
+    info!("Waiting for transaction (finalize attestation) to end...");
+    wait_for_tx(&wallet_core, &tx_hash, 3).await?;
+
+    let feed_state: FeedState = client.fetch_feed_price(&feed_id).await
+        .map_err(|e| anyhow!(e))?;
+    info!("feed state: {:?}", feed_state);
+    assert!(feed_state.pending.is_none());
+    let final_price = feed_state.last_final.ok_or(anyhow!("No final attestation"))?;
+    assert_eq!(final_price.status, AttestationStatus::Final);
+    assert_eq!(final_price.round, round);
+    assert_eq!(final_price.price, price);
+    assert_eq!(final_price.written_at, attested_price.written_at);
 
     Ok(())
 }

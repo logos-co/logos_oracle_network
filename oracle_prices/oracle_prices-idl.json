@@ -90,6 +90,12 @@
               }
             ]
           }
+        },
+        {
+          "name": "clock",
+          "writable": false,
+          "signer": false,
+          "init": false
         }
       ],
       "args": [
@@ -154,6 +160,50 @@
         {
           "name": "decimals",
           "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "finalize_attestation",
+      "accounts": [
+        {
+          "name": "feed_price",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": "oracle_prices__"
+              },
+              {
+                "kind": "arg",
+                "path": "feed_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "clock",
+          "writable": false,
+          "signer": false,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "feed_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "round",
+          "type": "u64"
         }
       ]
     }
@@ -235,6 +285,30 @@
           {
             "name": "written_at",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeedState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pending",
+            "type": {
+              "option": {
+                "defined": "AttestedPrice"
+              }
+            }
+          },
+          {
+            "name": "last_final",
+            "type": {
+              "option": {
+                "defined": "AttestedPrice"
+              }
+            }
           }
         ]
       }
