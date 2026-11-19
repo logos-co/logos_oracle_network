@@ -71,7 +71,7 @@
       ]
     },
     {
-      "name": "publish_price",
+      "name": "submit_attestation",
       "accounts": [
         {
           "name": "feed_price",
@@ -103,24 +103,57 @@
           }
         },
         {
-          "name": "price",
+          "name": "round",
           "type": "u64"
         },
         {
-          "name": "decimals",
-          "type": "u32"
-        },
-        {
-          "name": "valid_count",
-          "type": "u32"
-        },
-        {
-          "name": "round",
+          "name": "price",
           "type": "u64"
         },
         {
           "name": "confidence",
           "type": "u64"
+        },
+        {
+          "name": "set_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proposer_oracle_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proposer_channel_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proposer_leaf_index",
+          "type": "u64"
+        },
+        {
+          "name": "proposer_membership_proof",
+          "type": {
+            "vec": "u8"
+          }
+        },
+        {
+          "name": "decimals",
+          "type": "u32"
         }
       ]
     }
@@ -146,7 +179,7 @@
       }
     },
     {
-      "name": "PriceState",
+      "name": "AttestedPrice",
       "type": {
         "kind": "struct",
         "fields": [
@@ -168,19 +201,63 @@
             "type": "u32"
           },
           {
-            "name": "valid_count",
-            "type": "u32"
-          },
-          {
             "name": "round",
             "type": "u64"
           },
           {
             "name": "confidence",
             "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": "AttestationStatus"
+            }
+          },
+          {
+            "name": "set_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "proposer_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "written_at",
+            "type": "u64"
           }
         ]
       }
+    }
+  ],
+  "types": [
+    {
+      "name": "AttestationStatus",
+      "kind": "enum",
+      "variants": [
+        {
+          "name": "Pending"
+        },
+        {
+          "name": "Final"
+        },
+        {
+          "name": "Corrected"
+        },
+        {
+          "name": "Voided"
+        }
+      ]
     }
   ]
 }

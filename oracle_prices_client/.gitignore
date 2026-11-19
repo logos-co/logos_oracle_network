@@ -1,3 +1,4 @@
 target
-
+src/oracle_prices.h
+src/oracle_prices_ffi.rs
 .idea

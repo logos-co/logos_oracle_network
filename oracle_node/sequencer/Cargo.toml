@@ -68,6 +68,7 @@ alloy = { version = "2.5.0", features = ["full", "sol-types"] }
 # internal
 common =  { path = "../common" }
 oracle_register_client = { path = "../../oracle_register_client" }
+oracle_prices_client = { path = "../../oracle_prices_client" }
 rs_merkle = { version = "1.5.0", features = ["keccak256"] }
 toml = "1.1.8"
 dotenvy = "0.15.7"
@@ -86,4 +87,5 @@ prost-build = "0.14"
 
 [dev-dependencies]
 tempfile.workspace = true
+oracle_prices_core = { path = "../../oracle_prices/oracle_prices_core" }
 

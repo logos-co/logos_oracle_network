@@ -48,13 +48,17 @@ pub enum OraclePricesInstruction {
     InitializeFeed {
         feed_id: [u8; 32],
     },
-    PublishPrice {
+    SubmitAttestation {
         feed_id: [u8; 32],
-        price: u64,
-        decimals: u32,
-        valid_count: u32,
         round: u64,
+        price: u64,
         confidence: u64,
+        set_hash: [u8; 32],
+        proposer_oracle_id: [u8; 32],
+        proposer_channel_id: [u8; 32],
+        proposer_leaf_index: u64,
+        proposer_membership_proof: Vec<u8>,
+        decimals: u32,
     },
 }
 
@@ -67,10 +71,9 @@ pub struct InitializeFeedAccounts {
     pub feed_price: AccountId,
 }
 
-pub struct PublishPriceAccounts {
+pub struct SubmitAttestationAccounts {
     pub feed_price: AccountId,
 }
-
 
 pub struct OraclePricesClient<'w> {
     pub wallet: &'w WalletCore,
@@ -142,23 +145,31 @@ impl<'w> OraclePricesClient<'w> {
         Ok(hex::encode(response.0))
     }
 
-    pub async fn publish_price(
+    pub async fn submit_attestation(
         &self,
-        accounts: PublishPriceAccounts,
+        accounts: SubmitAttestationAccounts,
         feed_id: [u8; 32],
-        price: u64,
-        decimals: u32,
-        valid_count: u32,
         round: u64,
+        price: u64,
         confidence: u64,
+        set_hash: [u8; 32],
+        proposer_oracle_id: [u8; 32],
+        proposer_channel_id: [u8; 32],
+        proposer_leaf_index: u64,
+        proposer_membership_proof: Vec<u8>,
+        decimals: u32,
     ) -> Result<String, String> {
-        let instruction = OraclePricesInstruction::PublishPrice {
+        let instruction = OraclePricesInstruction::SubmitAttestation {
             feed_id,
-            price,
-            decimals,
-            valid_count,
             round,
+            price,
             confidence,
+            set_hash,
+            proposer_oracle_id,
+            proposer_channel_id,
+            proposer_leaf_index,
+            proposer_membership_proof,
+            decimals,
         };
         let mut account_ids: Vec<AccountId> = vec![
             accounts.feed_price,

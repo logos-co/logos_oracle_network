@@ -18,7 +18,7 @@ mod oracle_prices {
 
     #[allow(unused_imports)]
     use super::*;
-    use oracle_prices_core::PriceState;
+    use oracle_prices_core::{AttestationStatus, AttestedPrice};
 
     /// Initialize the contract
     #[instruction]
@@ -49,7 +49,7 @@ mod oracle_prices {
         mut feed_price: AccountWithMetadata,
         feed_id: [u8; 32],
     ) -> SpelResult {
-        let price = PriceState::default();
+        let price = AttestedPrice::default();
         let bytes = borsh::to_vec(&price).map_err(|e| SpelError::SerializationError {
             message: e.to_string(),
         })?;
@@ -74,30 +74,42 @@ mod oracle_prices {
         Ok(SpelOutput::execute(vec![oracle_prices_account, feed_price], vec![]))
     }
 
-    /// Publish an AttestedPrice to a price feed (require an initialized price feed)
+    /// Submit an AttestationSubmission to a price feed (require an initialized price feed)
+    /// and store it as an AttestedPrice
     #[instruction]
-    pub fn publish_price(
+    #[allow(clippy::too_many_arguments)]
+    pub fn submit_attestation(
         #[account(mut, pda = [literal("oracle_prices__"), arg("feed_id")])]
         mut feed_price: AccountWithMetadata,
         feed_id: [u8; 32],
-        price: u64,
-        decimals: u32,
-        valid_count: u32,
         round: u64,
+        price: u64,
         confidence: u64,
+        set_hash: [u8; 32],
+        proposer_oracle_id: [u8; 32],
+        proposer_channel_id: [u8; 32],
+        proposer_leaf_index: u64,
+        proposer_membership_proof: Vec<u8>,
+        decimals: u32,
     ) -> SpelResult {
 
         // TODO:
         // check "round" (only allow increasing round)?
         // pb: how to avoid an attacker to set a round too high?
+        // TODO: proposer must authorize the TX + check membership proof
+        //       (using proposer_channel_id, proposer_leaf_index & proposer_membership_proof)
+        let _ = (proposer_channel_id, proposer_leaf_index, proposer_membership_proof);
 
-        let price = PriceState {
+        let price = AttestedPrice {
             feed_id,
             price,
             decimals,
-            valid_count,
             round,
             confidence,
+            status: AttestationStatus::Pending,
+            set_hash,
+            proposer_id: proposer_oracle_id,
+            written_at: 0, // TODO: read block id from the clock account
         };
 
         // println!("publish price: {:?}", price);

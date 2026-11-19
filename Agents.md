@@ -31,7 +31,30 @@ Run all Cargo commands from inside the `/oracle_node` directory:
 
 ### LEZ Smart Contracts
 
-TODO
+Contracts dev: with the [Logos spel framework](https://github.com/logos-co/spel) and ran over the [Logos execution zone](https://github.com/logos-blockchain/logos-execution-zone).
+
+* oracle_register (in `oracle_register` folder)
+  * Compile: `make build`
+  * Generate idl: `spel generate-idl methods/guest/src/bin/oracle_register.rs > oracle_register-idl.json`
+  * Deploy (require a running LEZ): `make deploy`
+* oracle_prices (in `oracle_prices` folder)
+  * Compile: `make build`
+  * Generate idl: `spel generate-idl methods/guest/src/bin/oracle_prices.rs > oracle_prices-idl.json`
+  * Deploy (require a running LEZ): `make deploy`
+* swap_demo (in `swap_demo` folder)
+  * Compile: `make build`
+  * Generate idl: `spel generate-idl methods/guest/src/bin/swap_demo.rs > swap_demo-idl.json`
+  * Deploy (require a running LEZ): `make deploy`
+
+* Contracts tests (do not run unless explicitly requested)
+  * oracle_register: `RUST_LOG=info cargo test -j 8 -p sequencer --features e2e_lbc test_e2e_oracle_register -- --nocapture`
+  * oracle_prices: `RUST_LOG=info cargo test -j 8 -p sequencer --features e2e_lbc test_e2e_oracle_prices -- --nocapture`
+
+### LEZ Smart Contracts client
+
+Spel framework can generate contract client code automatically:
+* oracle_register: `cd oracle_register && spel-client-gen --idl oracle_register-idl.json --out-dir ../oracle_register_client/src`. Update `../oracle_register_client/src/lib.rs` accordingly.
+* oracle_prices: `cd oracle_prices && spel-client-gen --idl oracle_prices-idl.json --out-dir ../oracle_prices_client/src`. Update `../oracle_prices_client/src/lib.rs` accordingly.
 
 ## 🦀 Rust Workspace (`oracle_node`) Guidelines
 - **Toolchain:** Use stable Rust (unless specified otherwise).
@@ -43,5 +66,4 @@ TODO
 
 ## 📜 LEZ Smart Contract Guidelines
 
-Contracts dev: with the [Logos spel framework](https://github.com/logos-co/spel) and ran over the [Logos execution zone](https://github.com/logos-blockchain/logos-execution-zone).
 Mental model is very similar to Solana (think account model, PDA, but difference is that call to other contracts are async).
