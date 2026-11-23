@@ -111,6 +111,8 @@ Tips:
   * `make build`
   * `cp -v ~/local_target/oracle_prices/riscv32im-risc0-zkvm-elf/docker/oracle_prices.bin methods/guest/target/riscv32im-risc0-zkvm-elf/docker/oracle_prices.bin`
   * `spel generate-idl methods/guest/src/bin/oracle_prices.rs > oracle_prices-idl.json`
+  * Full rebuild:
+    * `cargo clean && rm -rf methods/guest/target/ && docker builder prune -f && make build`
 * Build (no docker)
   * `RISC0_USE_DOCKER=0 cargo build -j 8 --release`
   * `cp -v ~/local_target/oracle_prices/riscv-guest/oracle_prices-methods/oracle_prices-guest/riscv32im-risc0-zkvm-elf/release/oracle_prices.bin  methods/guest/target/riscv32im-risc0-zkvm-elf/docker/oracle_prices.bin`

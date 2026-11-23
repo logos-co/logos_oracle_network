@@ -10,9 +10,9 @@ name = "oracle_prices"
 path = "src/bin/oracle_prices.rs"
 
 [dependencies]
-spel-framework = { git = "https://github.com/logos-co/spel.git", branch = "main" }
-nssa_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", package = "lee_core" }
-clock_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
+spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.7.0" }
+nssa_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4", package = "lee_core" }
+clock_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4" }
 risc0-zkvm = { version = "=3.0.5", features = ["std"] }
 oracle_prices_core = { path = "../../oracle_prices_core" }
 serde = { version = "1.0", features = ["derive"] }

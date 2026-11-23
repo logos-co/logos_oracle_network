@@ -1,7 +1,6 @@
 // use std::str::FromStr;
 use anyhow::{anyhow, Context};
 use borsh::{BorshDeserialize, BorshSerialize};
-use sequencer_service_rpc::RpcClient as _;
 // use nssa::{
 //     AccountId,
 //     ProgramId, PublicTransaction,
@@ -52,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
         .collect();
     println!("pid: {}", program_id_hex_str);
 
-    let wallet_core = WalletCore::from_env()?;
+    let wallet_core = WalletCore::from_env().await?;
     let client = OraclePricesClient::new(&wallet_core, pid);
     println!("client program id: {:?}", client.program_id);
     // println!("client wallet: {:?}", client.wallet);
