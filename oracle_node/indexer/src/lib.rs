@@ -20,7 +20,7 @@ use tracing::{debug, error, info};
 use common::{time_info_poll, RegisterContractInfo, PricesContractInfo};
 use crate::args::IndexerArgs;
 use crate::indexer::{channel_discover, Indexer};
-use crate::lon::AttestedPrice;
+use crate::lon::AttestationSubmission;
 use crate::mtree::RootsCache;
 use crate::register_contract::merkle_tree_roots_poll;
 
@@ -73,14 +73,14 @@ impl TryFrom<&IndexerArgs> for IndexerConfig {
 
 /// Run the indexer until a task fails or `shutdown` is cancelled
 ///
-/// Every attested price successfully published to the oracle_prices contract is also sent to
+/// Every attestation successfully submitted to the oracle_prices contract is also sent to
 /// `attested_tx` (if provided).
 ///
 /// Note: does not install any tracing subscriber (this is up to the caller)
 pub async fn run(
     cfg: IndexerConfig,
     shutdown: CancellationToken,
-    attested_tx: Option<mpsc::UnboundedSender<AttestedPrice>>,
+    attested_tx: Option<mpsc::UnboundedSender<AttestationSubmission>>,
 ) -> anyhow::Result<()> {
 
     info!("Oracle Indexer starting up...");

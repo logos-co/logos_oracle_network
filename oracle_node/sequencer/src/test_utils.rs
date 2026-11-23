@@ -1,5 +1,9 @@
 use std::path::PathBuf;
+#[cfg(test)]
+use std::str::FromStr;
 use std::sync::Once;
+#[cfg(test)]
+use std::time::Duration;
 use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
 use wallet::WalletCore;
@@ -71,4 +75,41 @@ pub(crate) async fn send_deploy_tx(
 
     Ok(response)
 
+}
+
+/// Wait for a transaction (hex encoded hash) to be included in a block
+///
+/// Note: a transaction failing execution is skipped by the sequencer (never included in a block),
+///       so give up after `max_blocks` blocks
+#[cfg(test)]
+pub(crate) async fn wait_for_tx(wallet_core: &WalletCore, tx_hash: &str, max_blocks: u64) -> anyhow::Result<()> {
+
+    let hash = HashType::from_str(tx_hash)?;
+    let start_block = wallet_core.sequencer_client.get_last_block_id().await?;
+
+    loop {
+        if wallet_core.sequencer_client.get_transaction(hash).await?.is_some() {
+            debug!("Transaction {} included in a block", tx_hash);
+            return Ok(());
+        }
+
+        let current_block = wallet_core.sequencer_client.get_last_block_id().await?;
+        if current_block > start_block + max_blocks {
+            anyhow::bail!(
+                "Transaction {} not included after {} blocks (likely failed execution, check sequencer logs)",
+                tx_hash, max_blocks
+            );
+        }
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
+/// Wait for the sequencer to reach block id `block_id`
+#[cfg(test)]
+pub(crate) async fn wait_for_block(wallet_core: &WalletCore, block_id: u64) -> anyhow::Result<()> {
+    while wallet_core.sequencer_client.get_last_block_id().await? < block_id {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    Ok(())
 }

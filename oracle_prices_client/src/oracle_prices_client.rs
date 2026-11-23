@@ -48,13 +48,21 @@ pub enum OraclePricesInstruction {
     InitializeFeed {
         feed_id: [u8; 32],
     },
-    PublishPrice {
+    SubmitAttestation {
         feed_id: [u8; 32],
-        price: u64,
-        decimals: u32,
-        valid_count: u32,
         round: u64,
+        price: u64,
         confidence: u64,
+        set_hash: [u8; 32],
+        proposer_oracle_id: [u8; 32],
+        proposer_channel_id: [u8; 32],
+        proposer_leaf_index: u64,
+        proposer_membership_proof: Vec<u8>,
+        decimals: u32,
+    },
+    FinalizeAttestation {
+        feed_id: [u8; 32],
+        round: u64,
     },
 }
 
@@ -67,10 +75,15 @@ pub struct InitializeFeedAccounts {
     pub feed_price: AccountId,
 }
 
-pub struct PublishPriceAccounts {
+pub struct SubmitAttestationAccounts {
     pub feed_price: AccountId,
+    pub clock: AccountId,
 }
 
+pub struct FinalizeAttestationAccounts {
+    pub feed_price: AccountId,
+    pub clock: AccountId,
+}
 
 pub struct OraclePricesClient<'w> {
     pub wallet: &'w WalletCore,
@@ -142,26 +155,69 @@ impl<'w> OraclePricesClient<'w> {
         Ok(hex::encode(response.0))
     }
 
-    pub async fn publish_price(
+    pub async fn submit_attestation(
         &self,
-        accounts: PublishPriceAccounts,
+        accounts: SubmitAttestationAccounts,
         feed_id: [u8; 32],
-        price: u64,
-        decimals: u32,
-        valid_count: u32,
         round: u64,
+        price: u64,
         confidence: u64,
+        set_hash: [u8; 32],
+        proposer_oracle_id: [u8; 32],
+        proposer_channel_id: [u8; 32],
+        proposer_leaf_index: u64,
+        proposer_membership_proof: Vec<u8>,
+        decimals: u32,
     ) -> Result<String, String> {
-        let instruction = OraclePricesInstruction::PublishPrice {
+        let instruction = OraclePricesInstruction::SubmitAttestation {
             feed_id,
-            price,
-            decimals,
-            valid_count,
             round,
+            price,
             confidence,
+            set_hash,
+            proposer_oracle_id,
+            proposer_channel_id,
+            proposer_leaf_index,
+            proposer_membership_proof,
+            decimals,
         };
         let mut account_ids: Vec<AccountId> = vec![
             accounts.feed_price,
+            accounts.clock,
+        ];
+        let signer_ids: Vec<AccountId> = vec![
+        ];
+        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+            .map_err(|e| format!("nonces: {}", e))?;
+        let mut signing_keys = Vec::new();
+        for sid in &signer_ids {
+            let key = self.wallet
+                .get_account_public_signing_key(*sid)
+                .ok_or_else(|| format!("signing key not found for {}", sid))?;
+            signing_keys.push(key);
+        }
+        let message = Message::try_new(self.program_id, account_ids, nonces, instruction)
+            .map_err(|e| format!("message: {:?}", e))?;
+        let witness_set = WitnessSet::for_message(&message, &signing_keys);
+        let tx = PublicTransaction::new(message, witness_set);
+        let response = self.wallet.sequencer_client.send_transaction(common::transaction::LeeTransaction::Public(tx)).await
+            .map_err(|e| format!("submit: {}", e))?;
+        Ok(hex::encode(response.0))
+    }
+
+    pub async fn finalize_attestation(
+        &self,
+        accounts: FinalizeAttestationAccounts,
+        feed_id: [u8; 32],
+        round: u64,
+    ) -> Result<String, String> {
+        let instruction = OraclePricesInstruction::FinalizeAttestation {
+            feed_id,
+            round,
+        };
+        let mut account_ids: Vec<AccountId> = vec![
+            accounts.feed_price,
+            accounts.clock,
         ];
         let signer_ids: Vec<AccountId> = vec![
         ];

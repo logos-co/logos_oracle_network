@@ -21,9 +21,9 @@ use logos_blockchain_zone_sdk::adapter::NodeHttpClient;
 use logos_blockchain_zone_sdk::indexer::ZoneIndexer;
 // internal
 use common::{PricesContractInfo, RegisterContractInfo, TimeInfo, PRICE_OBSERVATION_DECIMAL};
-use crate::indexer::lon::{AttestedPrice, PriceObservation};
+use crate::indexer::lon::{AttestationSubmission, PriceObservation};
 use crate::mtree::TreeSnapshot;
-use crate::prices_contract::publish_attested_price;
+use crate::prices_contract::{finalize_attestation, submit_attestation};
 use crate::register_contract::fetch_oracle_register_state;
 
 pub mod lon {
@@ -40,8 +40,8 @@ pub struct Indexer {
     feed_workers: HashMap<String, mpsc::Sender<(ChannelId, PriceObservation)>>,
     pc_info: PricesContractInfo,
     merkle_tree_roots: Arc<RwLock<VecDeque<TreeSnapshot>>>,
-    /// Successfully published attested prices are also sent here (if any)
-    attested_tx: Option<mpsc::UnboundedSender<AttestedPrice>>,
+    /// Successfully submitted attestations are also sent here (if any)
+    attested_tx: Option<mpsc::UnboundedSender<AttestationSubmission>>,
 }
 
 impl Indexer {
@@ -54,7 +54,7 @@ impl Indexer {
         channels_rx: watch::Receiver<HashSet<ChannelId>>,
         pc_info: PricesContractInfo,
         merkle_tree_roots: Arc<RwLock<VecDeque<TreeSnapshot>>>,
-        attested_tx: Option<mpsc::UnboundedSender<AttestedPrice>>,
+        attested_tx: Option<mpsc::UnboundedSender<AttestationSubmission>>,
     ) -> anyhow::Result<Self> {
         let node_url = Url::parse(node_endpoint)?;
         Ok(Self {
@@ -303,7 +303,7 @@ async fn price_feed_worker(
     mut time_rx: watch::Receiver<Option<TimeInfo>>,
     pc_info: PricesContractInfo,
     roots: Arc<RwLock<VecDeque<TreeSnapshot>>>,
-    attested_tx: Option<mpsc::UnboundedSender<AttestedPrice>>,
+    attested_tx: Option<mpsc::UnboundedSender<AttestationSubmission>>,
 ) {
     info!("Started feed worker for {}", cfg.feed_id);
 
@@ -313,6 +313,8 @@ async fn price_feed_worker(
     // State for the current round
     let mut current_round = 0;
     let mut current_round_observations: Vec<PriceObservation> = Vec::new();
+    // Last submission written as PENDING, finalized on next round
+    let mut pending_submission: Option<AttestationSubmission> = None;
 
     // Initialize current_round based on the current slot
     if let Some(info) = time_rx.borrow().as_ref() {
@@ -338,6 +340,18 @@ async fn price_feed_worker(
                 if active_round > current_round {
 
                     // info!("[price_feed_worker] new round...");
+
+                    // Dispute window should be over -> finalize previous attestation
+                    // Note: if this fails, the contract still finalizes it on the next submit_attestation
+                    //       (if its dispute window is over)
+                    if let Some(submission) = pending_submission.take() {
+                        if let Err(e) = finalize_attestation(&pc_info, &submission.feed_id, submission.round).await {
+                            error!("[Feed {}] Error while finalizing attestation for round {}: {}",
+                                   cfg.feed_id, submission.round, e);
+                        } else {
+                            info!("[Feed {}] Sent finalize attestation for round {}", cfg.feed_id, submission.round);
+                        }
+                    }
 
                     // new round -> compute PriceAttestation
 
@@ -366,28 +380,33 @@ async fn price_feed_worker(
                             r.into()
                         };
 
-                        let attested_price = AttestedPrice {
-                            feed_id: feed_id.to_vec(),
-                            price: attested_median,
-                            decimals: PRICE_OBSERVATION_DECIMAL,
-                            valid_count: obs_count as u32,
+                        let submission = AttestationSubmission {
                             round: current_round as i64,
+                            price: attested_median,
                             confidence: 0, // TODO: Implement 1.4826 * MAD
+                            set_hash: vec![0; 32], // TODO
+                            proposer_oracle_id: vec![0; 32], // TODO
+                            proposer_channel_id: vec![0; 32], // TODO
+                            proposer_leaf_index: 0, // TODO
+                            proposer_membership_proof: vec![], // TODO
+                            decimals: PRICE_OBSERVATION_DECIMAL,
+                            feed_id: feed_id.to_vec(),
                         };
 
                         info!("[Feed {}] Attested round {}: Price {}, Count {}",
-                              cfg.feed_id, current_round, attested_price.price, obs_count);
+                              cfg.feed_id, current_round, submission.price, obs_count);
 
-                        if let Err(e) = publish_attested_price(&pc_info, attested_price.clone()).await {
-                            error!("Error while publishing attested price: {}", e);
+                        if let Err(e) = submit_attestation(&pc_info, &submission).await {
+                            error!("Error while submitting attestation: {}", e);
                         } else {
-                            info!("Successfully published attested price to oracle pices contract :-) :-D !!!");
+                            info!("Successfully submitted attestation to oracle prices contract");
                             if let Some(attested_tx) = &attested_tx {
-                                if attested_tx.send(attested_price).is_err() {
+                                if attested_tx.send(submission.clone()).is_err() {
                                     // Receiver dropped -> nobody is listening anymore, not an error
-                                    debug!("Attested price receiver dropped");
+                                    debug!("Attestation submission receiver dropped");
                                 }
                             }
+                            pending_submission = Some(submission);
                         }
 
                     } else {
