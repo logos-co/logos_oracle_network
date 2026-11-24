@@ -249,7 +249,7 @@ async fn main() -> anyhow::Result<()> {
         println!("as hex, pid 2: {}", program_id_hex_str);
     }
 
-    let wallet_core = WalletCore::from_env()?;
+    let wallet_core = WalletCore::from_env().await?;
 
     // Debug 2 - get Account from wallet
     {

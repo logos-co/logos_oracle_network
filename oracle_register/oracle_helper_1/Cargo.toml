@@ -6,6 +6,6 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.104"
 sha2 = "0.10.9"
-spel-framework = { git = "https://github.com/logos-co/spel.git", branch = "main" }
+spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.7.0" }
 risc0-zkvm = { version = "=3.0.5", features = ["std", "getrandom"] }
 hex = "0.4.3"
