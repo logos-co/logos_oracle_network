@@ -24,3 +24,14 @@ tokio       = { version = "1", features = ["rt-multi-thread"] }
 anyhow = "1.0.104"
 
 oracle_register_core = { path = "../oracle_register/oracle_register_core" }
+[features]
+# e2e tests require a running Logos blockchain (LEZ sequencer)
+e2e_lbc = []
+
+[dev-dependencies]
+e2e_utils = { path = "../e2e_utils" }
+token_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+serial_test = "3"
+tempfile = "3"
+tracing = "0.1"

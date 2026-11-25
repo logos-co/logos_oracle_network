@@ -13,10 +13,6 @@ mod pre_aggregator;
 
 #[cfg(test)]
 mod test_utils;
-#[cfg(test)]
-mod token_client;
-#[cfg(test)]
-mod e2e_tests;
 
 pub mod lon {
     include!(concat!(env!("OUT_DIR"), "/lon.rs"));

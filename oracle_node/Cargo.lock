@@ -9011,32 +9011,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "oracle_prices_core"
-version = "0.1.0"
-dependencies = [
- "borsh 1.8.0",
- "serde",
- "spel-framework 0.7.0",
-]
-
-[[package]]
 name = "oracle_register_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "borsh 1.8.0",
- "common 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.0)",
+ "common 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.4)",
  "hex",
- "lee 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.0)",
- "lee_core 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.0)",
+ "lee 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.4)",
+ "lee_core 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.4)",
  "oracle_register_core",
- "sequencer_service_rpc 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.0)",
+ "sequencer_service_rpc 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.4)",
  "serde",
- "spel-framework 0.6.0",
- "spel-framework-core 0.6.0",
+ "spel-framework 0.7.0",
+ "spel-framework-core 0.7.0",
  "tiny-keccak",
  "tokio",
- "wallet 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.0)",
+ "wallet 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.4)",
 ]
 
 [[package]]
@@ -9046,7 +9037,7 @@ dependencies = [
  "borsh 1.8.0",
  "rs_merkle",
  "serde",
- "spel-framework-macros 0.6.0",
+ "spel-framework-macros 0.7.0",
  "tiny-keccak",
 ]
 
@@ -11292,7 +11283,6 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
- "clock_core 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.0)",
  "common 0.1.0 (git+https://github.com/logos-blockchain/logos-execution-zone.git?tag=v0.2.0)",
  "common 0.2.1",
  "dashmap",
@@ -11306,7 +11296,6 @@ dependencies = [
  "logos-blockchain-key-management-system-service",
  "logos-blockchain-zone-sdk",
  "oracle_prices_client",
- "oracle_prices_core",
  "oracle_register_client",
  "prost 0.14.4",
  "prost-build",

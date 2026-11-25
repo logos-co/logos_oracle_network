@@ -46,9 +46,10 @@ Contracts dev: with the [Logos spel framework](https://github.com/logos-co/spel)
   * Generate idl: `spel generate-idl methods/guest/src/bin/swap_demo.rs > swap_demo-idl.json`
   * Deploy (require a running LEZ): `make deploy`
 
-* Contracts tests (do not run unless explicitly requested)
-  * oracle_register: `RUST_LOG=info cargo test -j 8 -p sequencer --features e2e_lbc test_e2e_oracle_register -- --nocapture`
-  * oracle_prices: `RUST_LOG=info cargo test -j 8 -p sequencer --features e2e_lbc test_e2e_oracle_prices -- --nocapture`
+* Contracts e2e tests (require a running LEZ, do not run unless explicitly requested)
+  * Tests live in the client crates (`tests/e2e.rs`), shared helpers in `e2e_utils`
+  * oracle_register: `cd oracle_register_client && RUST_LOG=info cargo test --features e2e_lbc --test e2e -- --nocapture`
+  * oracle_prices: `cd oracle_prices_client && RUST_LOG=info cargo test --features e2e_lbc --test e2e -- --nocapture`
 
 ### LEZ Smart Contracts client
 

@@ -1,0 +1,15 @@
+[package]
+name = "e2e_utils"
+version = "0.1.0"
+edition = "2024"
+description = "Shared helpers for contract e2e tests (require a running LEZ sequencer)"
+
+[dependencies]
+lee         = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4" }
+common      = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4" }
+sequencer_service_rpc = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4", features = ["client"] }
+wallet      = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4" }
+tokio       = { version = "1", features = ["time"] }
+anyhow = "1.0.104"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
