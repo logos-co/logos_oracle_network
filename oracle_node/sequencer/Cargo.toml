@@ -12,10 +12,6 @@ version.workspace = true
 [lints]
 workspace = true
 
-[features]
-# Enable tests requiring a running Logos blockchain (e.g. started via docker compose)
-e2e_lbc = []
-
 [dependencies]
 anyhow = "1.0.102"
 tokio = { default-features = false, features = [
@@ -59,9 +55,9 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 prost = "0.14" # grpc
 secp256k1 = { version = "0.29", features = ["rand", "hashes"] } # BIP-340 x-only
 # contract dev
-spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
-# spel = { git = "https://github.com/logos-co/spel.git", tag = "v0.6.0" }
-wallet  = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
+spel-framework = { git = "https://github.com/logos-co/spel.git", tag = "v0.7.0" }
+# spel = { git = "https://github.com/logos-co/spel.git", tag = "v0.7.0" }
+wallet  = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.4" }
 # uniswap
 alloy = { version = "2.5.0", features = ["full", "sol-types"] }
 
@@ -74,19 +70,10 @@ toml = "1.1.8"
 dotenvy = "0.15.7"
 serial_test.workspace = true
 
-# only for tests?
-lee = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["test-utils"] }
-lez_common = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", package = "common" }
-sequencer_service_rpc = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["client"] }
-bs58 = "0.5.1"
-token_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
-borsh = { version = "1.5", features = ["derive"] }
 
 [build-dependencies]
 prost-build = "0.14"
 
 [dev-dependencies]
 tempfile.workspace = true
-oracle_prices_core = { path = "../../oracle_prices/oracle_prices_core" }
-clock_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0" }
 

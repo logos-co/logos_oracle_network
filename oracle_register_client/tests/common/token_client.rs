@@ -3,13 +3,12 @@
 //! DO NOT EDIT — regenerate from IDL instead.
 
 use sequencer_service_rpc::RpcClient as _;
-use lee::{
+use nssa::{
     AccountId, ProgramId, PublicTransaction,
     public_transaction::{Message, WitnessSet},
 };
 use borsh::BorshDeserialize;
 use serde::{Deserialize, Serialize};
-use token_core::NewTokenDefinition;
 use wallet::WalletCore;
 
 /// Parse a hex string into ProgramId [u32; 8] (little-endian byte order).
@@ -135,7 +134,7 @@ impl<'w> TokenClient<'w> {
         let signer_ids: Vec<AccountId> = vec![
             accounts.sender,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -148,7 +147,7 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(lez_common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -173,7 +172,7 @@ impl<'w> TokenClient<'w> {
             accounts.definition_target_account,
             accounts.holding_target_account,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -186,12 +185,12 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(lez_common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
 
-    /*
+    /* FIXME: spel-client-gen emits an invalid `metadata: Box` type for this instruction
     pub async fn new_definition_with_metadata(
         &self,
         accounts: NewDefinitionWithMetadataAccounts,
@@ -212,7 +211,7 @@ impl<'w> TokenClient<'w> {
             accounts.holding_target_account,
             accounts.metadata_target_account,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -225,7 +224,7 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -243,7 +242,7 @@ impl<'w> TokenClient<'w> {
         let signer_ids: Vec<AccountId> = vec![
             accounts.account_to_initialize,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -256,7 +255,7 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(lez_common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -276,7 +275,7 @@ impl<'w> TokenClient<'w> {
         let signer_ids: Vec<AccountId> = vec![
             accounts.user_holding_account,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -289,7 +288,7 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(lez_common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -309,7 +308,7 @@ impl<'w> TokenClient<'w> {
         let signer_ids: Vec<AccountId> = vec![
             accounts.definition_account,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -322,7 +321,7 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(lez_common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -343,7 +342,7 @@ impl<'w> TokenClient<'w> {
         let signer_ids: Vec<AccountId> = vec![
             accounts.authority_account,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -356,7 +355,7 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(lez_common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -375,7 +374,7 @@ impl<'w> TokenClient<'w> {
         let signer_ids: Vec<AccountId> = vec![
             accounts.definition_account,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -388,7 +387,7 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(lez_common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -408,7 +407,7 @@ impl<'w> TokenClient<'w> {
         let signer_ids: Vec<AccountId> = vec![
             accounts.authority_account,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -421,7 +420,7 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(lez_common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -439,7 +438,7 @@ impl<'w> TokenClient<'w> {
             accounts.master_account,
             accounts.printed_account,
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -452,7 +451,7 @@ impl<'w> TokenClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(lez_common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }

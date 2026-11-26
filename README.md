@@ -21,6 +21,17 @@ RUST_LOG=info cargo run --features standalone -p sequencer_service -- lez/sequen
 Note: 
 * reset sequencer: `rm -rf logos-execution-zone/rocksdb`
 
+## Launch the logos execution zone (LEZ v0.2.4)
+
+From the `logos-execution-zone` repo (checked out at `v0.2.4`), in 2 terminals:
+* Terminal 1 (Bedrock node, in docker): `just run-bedrock`
+* Terminal 2 (LEZ sequencer, RPC on port 3040): `just run-sequencer`
+
+Note:
+* this replaces `docker compose up` (see "Logos blockchain setup" below, LEZ v0.2.0)
+* wait for the sequencer to produce blocks before deploying contracts
+* fresh restart: stop both, then `just clean` (removes sequencer / indexer rocksdb, bedrock signing key, debug wallet storage & bedrock docker volumes) and run both again
+
 ## Wallet
 
 * Create a public account
@@ -59,13 +70,17 @@ Note:
 * Copy file
   * `cp -v /home/ubuntu/local_target/oracle_register/riscv32im-risc0-zkvm-elf/docker/oracle_register.bin methods/guest/target/riscv32im-risc0-zkvm-elf/docker/oracle_register.bin` 
   * dev build: `cp -v /home/ubuntu/local_target/oracle_register/riscv-guest/oracle_register-methods/oracle_register-guest/riscv32im-risc0-zkvm-elf/release/oracle_register.bin methods/guest/target/riscv32im-risc0-zkvm-elf/docker/oracle_register.bin`
+* Prerequisite: token program deployed + LON token created (see "LEZ token program" below)
 * `make deploy`
-* `spel initialize --owner 5EYkqoY3fXNGqUABDMaCFurivdofeaXUofpKnJ6NrQE3 --token-program-id 0,0,...`
-  * token program id can computed using: `lon_helpers` (FIXME / TODO: commit or find a better place)
-    * `cd ../oracle_node` and `cargo run -p common --example print_program_id -- __HEX_STR__` (use hex string when program has been deployed)
-* Register an oracle node:
+* `spel initialize --owner C3EnT7M6kh3Dz3nX7FskfFDMk4mqNP6SLEtk34ZnLp8c --token-program-id 1824305940,902834625,3130365343,1050763279,2414906698,2830208766,2059686194,2825374910`
+  * token program id: `spel program-id <token.bin> --format json` (use `program_id_decimal`)
+  * owner: use the LON holding account (owned by the token program). With spel v0.7, a `#[account(signer)]` account that is not owned yet (e.g. a fresh wallet account) is claimed by the program
+  * check: `spel pda register` then `spel inspect <REGISTER_PDA> --type RegisterState`* Register an oracle node:
   * Generate `pda_seed` + `to` account: `cd oracle_helper_1 && cargo run`
-  * `spel register --token-def-account 3R413ZmQ7yETsNCEVHmVD4ju9z2GP9HLTEMQb3Ps85rx --oracle-key 0000000000000000000000000000000000000000000000000000000000000001 --from EJg2dB2YWZTQjbBvz3VEhEM2mgvXNRrZ9CkXM6nwXugb --to Egmcm7LRjeEZYPNGNDKd1m81jSjkbpwvZ75Lh6kAdbDn --pda-seed d546e7902066da243a0efa4e4d716b7f78356fa6632adb563fb74ce0a0366d73`
+    * `to` = "compute vault pda", `pda_seed` = "vault pda seed bytes hex"
+  * `spel register --token-def-account EFHm2oZxQoxAN8xPipuBxsTYt8Fe6Qa8aewE7dEPhwVA --oracle-key 0000000000000000000000000000000000000000000000000000000000000001 --from C3EnT7M6kh3Dz3nX7FskfFDMk4mqNP6SLEtk34ZnLp8c --to WaFJ7BesuVcMBB1oJpU3enbxoFsBahGNu3T6k2C3C7k --pda-seed d546e7902066da243a0efa4e4d716b7f78356fa6632adb563fb74ce0a0366d73`
+    * `from`: the LON holding account, `token-def-account`: the LON token definition account
+  * check the stake (`LON_STAKE_AMOUNT` LON moved from `from` to the vault): `spel --idl artifacts/token-idl.json -p <token.bin> inspect WaFJ7BesuVcMBB1oJpU3enbxoFsBahGNu3T6k2C3C7k --type TokenHolding` (from lez-programs)
 
 ### Generate client code
 
@@ -111,6 +126,8 @@ Tips:
   * `make build`
   * `cp -v ~/local_target/oracle_prices/riscv32im-risc0-zkvm-elf/docker/oracle_prices.bin methods/guest/target/riscv32im-risc0-zkvm-elf/docker/oracle_prices.bin`
   * `spel generate-idl methods/guest/src/bin/oracle_prices.rs > oracle_prices-idl.json`
+  * Full rebuild:
+    * `cargo clean && rm -rf methods/guest/target/ && docker builder prune -f && make build`
 * Build (no docker)
   * `RISC0_USE_DOCKER=0 cargo build -j 8 --release`
   * `cp -v ~/local_target/oracle_prices/riscv-guest/oracle_prices-methods/oracle_prices-guest/riscv32im-risc0-zkvm-elf/release/oracle_prices.bin  methods/guest/target/riscv32im-risc0-zkvm-elf/docker/oracle_prices.bin`
@@ -119,16 +136,21 @@ Tips:
   * `make deploy`
 * Init contract
   * `spel initialize`
-* Init a feed
-  * `spel initialize-feed --feed-id 0000000000000000000000000000000000000000000000000000000000000001`
-* Publish a price
-  * `spel publish-price --feed-id 0000000000000000000000000000000000000000000000000000000000000001 --price 1000 --decimals 8 --valid-count 3 --round 1000 --confidence 4242`
-* Get price
-  * `spel pda feed_price --feed-id 0000000000000000000000000000000000000000000000000000000000000001`
-    * `spel inspect "NjvkDBbwv6dfxHfyGQR7seiGXQwcvDfkYPHmCmURHym" --type PriceState`
+* Init a feed (feed id: hex64 or string <= 32 chars)
+  * `spel initialize-feed --feed-id manual_feed_1`
+* Submit an attestation (price is pending until the dispute window is over)
+  * `spel submit-attestation --feed-id manual_feed_1 --round 1 --price 1000 --decimals 8 --confidence 4242 --set-hash 0303030303030303030303030303030303030303030303030303030303030303 --proposer-oracle-id 0101010101010101010101010101010101010101010101010101010101010101 --proposer-channel-id 0202020202020202020202020202020202020202020202020202020202020202 --proposer-leaf-index 0 --proposer-membership-proof 0 --clock 4BdcjoXkq786TMWcBGGHqcxeLYMZmn17rL4eM9ZyRWNU`
+    * `--clock`: LEZ clock account (`CLOCK_01_PROGRAM_ACCOUNT_ID`)
+    * `--proposer-membership-proof`: not verified yet by the contract; spel cannot parse an empty `Vec<u8>` (`""`), so pass a dummy `0`
+* Finalize the attestation (after `DISPUTE_WINDOW_BLOCKS` blocks, otherwise rejected)
+  * `spel finalize-attestation --feed-id manual_feed_1 --round 1 --clock 4BdcjoXkq786TMWcBGGHqcxeLYMZmn17rL4eM9ZyRWNU`
+* Get price (`pending` after submit, `last_final` after finalize)
+  * `spel pda feed_price --feed-id manual_feed_1`
+    * `spel inspect "D4hSX7eAK5NSqQjvcTXZYh4wESqfvFYYprTT8DRcxPJy" --type FeedState`
 * Get feeds
   * `spel pda oracle_prices_account`
-    * `spel inspect "5mprrVcUZgyMDRg4RD6pkwMHXK5DbwrPnEGZwm5ZKUHy" --type OraclePricesState` 
+    * `spel inspect "BH33rRmEiN1J7EY6wzP3kPL8zCSpqdD3uKBG96EF2LQ" --type OraclePricesState`
+* Note: `[u8; 32]` fields (feed_id, set_hash...) are displayed by `spel inspect` as account ids (`Public/...`)
 
 ### oracle_prices contract client
 

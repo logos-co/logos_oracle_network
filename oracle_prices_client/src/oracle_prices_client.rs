@@ -105,7 +105,7 @@ impl<'w> OraclePricesClient<'w> {
         ];
         let signer_ids: Vec<AccountId> = vec![
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -118,7 +118,7 @@ impl<'w> OraclePricesClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -137,7 +137,7 @@ impl<'w> OraclePricesClient<'w> {
         ];
         let signer_ids: Vec<AccountId> = vec![
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -150,7 +150,7 @@ impl<'w> OraclePricesClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -187,7 +187,7 @@ impl<'w> OraclePricesClient<'w> {
         ];
         let signer_ids: Vec<AccountId> = vec![
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -200,7 +200,7 @@ impl<'w> OraclePricesClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -221,7 +221,7 @@ impl<'w> OraclePricesClient<'w> {
         ];
         let signer_ids: Vec<AccountId> = vec![
         ];
-        let nonces = self.wallet.get_accounts_nonces(signer_ids.clone()).await
+        let nonces = self.wallet.get_accounts_nonces(&signer_ids).await
             .map_err(|e| format!("nonces: {}", e))?;
         let mut signing_keys = Vec::new();
         for sid in &signer_ids {
@@ -234,7 +234,7 @@ impl<'w> OraclePricesClient<'w> {
             .map_err(|e| format!("message: {:?}", e))?;
         let witness_set = WitnessSet::for_message(&message, &signing_keys);
         let tx = PublicTransaction::new(message, witness_set);
-        let response = self.wallet.sequencer_client.send_transaction(common::transaction::LeeTransaction::Public(tx)).await
+        let response = self.wallet.helm_owned().send_transaction(common::transaction::LeeTransaction::Public(tx)).await
             .map_err(|e| format!("submit: {}", e))?;
         Ok(hex::encode(response.0))
     }
@@ -244,8 +244,7 @@ impl<'w> OraclePricesClient<'w> {
         &self,
     ) -> Result<T, String> {
         let account_id = compute_oracle_prices_account_pda(&self.program_id);
-        let account = self.wallet.sequencer_client
-            .get_account(account_id).await
+        let account = self.wallet.get_account_public(account_id).await
             .map_err(|e| format!("fetch oracle_prices_account: {}", e))?;
         T::try_from_slice(&account.data)
             .map_err(|e| format!("deserialize oracle_prices_account: {}", e))
@@ -257,8 +256,7 @@ impl<'w> OraclePricesClient<'w> {
         feed_id: &[u8; 32],
     ) -> Result<T, String> {
         let account_id = compute_feed_price_pda(&self.program_id, feed_id);
-        let account = self.wallet.sequencer_client
-            .get_account(account_id).await
+        let account = self.wallet.get_account_public(account_id).await
             .map_err(|e| format!("fetch feed_price: {}", e))?;
         T::try_from_slice(&account.data)
             .map_err(|e| format!("deserialize feed_price: {}", e))

@@ -5,13 +5,18 @@ pub const TREE_DEPTH: usize = 10;
 /// Maximum number of leaves the tree can hold (2^TREE_DEPTH).
 pub const TREE_CAPACITY: usize = 1 << TREE_DEPTH;
 
+// Note: struct array sizes are literals (not TREE_DEPTH / TREE_CAPACITY) because `spel generate-idl`
+//       cannot resolve consts (array size would be 0 in the IDL)
+const _: () = assert!(TREE_DEPTH == 10, "update OracleMerkleTree array sizes");
+const _: () = assert!(TREE_CAPACITY == 1024, "update RegisterState::registered array size");
+
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 /// A lightweight Incremental Merkle Tree
 pub struct OracleMerkleTree {
     /// Caches the right-most nodes at each level of the tree.
-    pub filled_subtrees: [[u8; 32]; TREE_DEPTH],
+    pub filled_subtrees: [[u8; 32]; 10], // TREE_DEPTH
     /// Pre-computed hashes of empty subtrees to calculate the root on the fly.
-    pub zero_hashes: [[u8; 32]; TREE_DEPTH],
+    pub zero_hashes: [[u8; 32]; 10], // TREE_DEPTH
     /// The current, officially updated membership root.
     pub current_root: [u8; 32],
     /// The total number of registered oracles - acts as the insert index
