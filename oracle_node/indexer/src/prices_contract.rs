@@ -4,14 +4,21 @@ use wallet::WalletCore;
 use clock_core::CLOCK_01_PROGRAM_ACCOUNT_ID;
 use spel_framework::prelude::{seed_from_str, AccountId, ProgramId, compute_pda_multi, ToSeed};
 // internal
-use common::PricesContractInfo;
+use common::{run_lez, PricesContractInfo};
 use oracle_prices_client::{compute_feed_price_pda, FinalizeAttestationAccounts, OraclePricesClient,
                            SubmitAttestationAccounts};
 use crate::indexer::lon::AttestationSubmission;
 
 pub async fn submit_attestation(pc_info: &PricesContractInfo, submission: &AttestationSubmission) -> anyhow::Result<()> {
+    // LEZ calls are not Send - see run_lez doc
+    let (pc_info, submission) = (pc_info.clone(), submission.clone());
+    run_lez(move || async move { submit_attestation_(&pc_info, &submission).await }).await
+}
+
+async fn submit_attestation_(pc_info: &PricesContractInfo, submission: &AttestationSubmission) -> anyhow::Result<()> {
 
     let wallet_core = WalletCore::from_env()
+        .await
         .context("Getting wallet accounts from env")?;
     let client = OraclePricesClient::new(&wallet_core, pc_info.oracle_prices_program_id);
 
@@ -41,8 +48,15 @@ pub async fn submit_attestation(pc_info: &PricesContractInfo, submission: &Attes
 
 /// Finalize the pending attestation (feed_id, round) - dispute window must be over
 pub async fn finalize_attestation(pc_info: &PricesContractInfo, feed_id: &[u8], round: i64) -> anyhow::Result<()> {
+    // LEZ calls are not Send - see run_lez doc
+    let (pc_info, feed_id) = (pc_info.clone(), feed_id.to_vec());
+    run_lez(move || async move { finalize_attestation_(&pc_info, &feed_id, round).await }).await
+}
+
+async fn finalize_attestation_(pc_info: &PricesContractInfo, feed_id: &[u8], round: i64) -> anyhow::Result<()> {
 
     let wallet_core = WalletCore::from_env()
+        .await
         .context("Getting wallet accounts from env")?;
     let client = OraclePricesClient::new(&wallet_core, pc_info.oracle_prices_program_id);
 

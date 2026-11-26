@@ -11,14 +11,24 @@ use wallet::WalletCore;
 // internal
 use oracle_register_client::{OracleRegisterClient, RegisterAccounts, RegisterState as OracleRegisterState, RegisterState};
 use tokio::sync::RwLock;
-use common::RegisterContractInfo;
+use common::{run_lez, RegisterContractInfo};
 
+/// Register the oracle node (if not already registered) and return its index in the merkle tree
 pub async fn sequencer_register(
     rc_info: RegisterContractInfo,
     node_id: &[u8; 32]
 ) -> anyhow::Result<u32> {
-    
-    let wallet_core = WalletCore::from_env().context("Getting wallet accounts from env")?;
+    // LEZ calls are not Send - see run_lez doc
+    let node_id = *node_id;
+    run_lez(move || async move { sequencer_register_(rc_info, &node_id).await }).await
+}
+
+async fn sequencer_register_(
+    rc_info: RegisterContractInfo,
+    node_id: &[u8; 32]
+) -> anyhow::Result<u32> {
+
+    let wallet_core = WalletCore::from_env().await.context("Getting wallet accounts from env")?;
     let oracle_register_program_id = ProgramId::from(rc_info.oracle_register_program_id);
     let client = OracleRegisterClient::new(&wallet_core, oracle_register_program_id);
 
@@ -60,10 +70,7 @@ pub async fn sequencer_register(
         debug!("Tx response: {}", response);
 
         info!("Waiting for confirmation...");
-        let poller = wallet::poller::TxPoller::new(
-            wallet_core.config(),
-            wallet_core.sequencer_client.clone(),
-        );
+        let poller = wallet_core.poller_helm();
 
         let mut tx_hash = [0u8; 32];
         hex::decode_to_slice(response, &mut tx_hash)?;
@@ -83,7 +90,7 @@ pub async fn sequencer_register(
     }
 
     info!("Fetching oracle_register to find oracle index...");
-    let register_state = fetch_oracle_register_state(&rc_info).await?;
+    let register_state = fetch_oracle_register_state_(&rc_info).await?;
     let oracle_node_mtree_index = register_state
         .registered
         .iter()
@@ -119,8 +126,14 @@ pub fn compute_pda_from_literal(program_id: &ProgramId, literal: &str) -> Accoun
 
 // TODO / FIXME: duplicated code (see indexer)
 pub async fn fetch_oracle_register_state(rc_info: &RegisterContractInfo) -> anyhow::Result<RegisterState> {
+    // LEZ calls are not Send - see run_lez doc
+    let rc_info = rc_info.clone();
+    run_lez(move || async move { fetch_oracle_register_state_(&rc_info).await }).await
+}
 
-    let wallet_core = WalletCore::from_env().context("Getting wallet accounts from env")?;
+async fn fetch_oracle_register_state_(rc_info: &RegisterContractInfo) -> anyhow::Result<RegisterState> {
+
+    let wallet_core = WalletCore::from_env().await.context("Getting wallet accounts from env")?;
     let oracle_register_program_id = ProgramId::from(rc_info.oracle_register_program_id);
     let client = OracleRegisterClient::new(&wallet_core, oracle_register_program_id);
 

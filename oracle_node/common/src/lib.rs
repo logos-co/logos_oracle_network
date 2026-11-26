@@ -6,6 +6,7 @@ mod redstone;
 mod contract;
 mod coinbase;
 mod uniswap;
+mod lez;
 
 pub use pyth::HermesPriceEvent;
 pub use time_fetch::{time_info_poll, TimeInfo};
@@ -20,3 +21,4 @@ pub use contract::{
 };
 pub use coinbase::{CoinbaseMessage, CoinbaseEvent, CoinbaseTicker, CoinbaseData};
 pub use uniswap::UniswapData;
+pub use lez::run_lez;

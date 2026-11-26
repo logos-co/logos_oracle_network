@@ -9,7 +9,7 @@ use wallet::WalletCore;
 // internal
 use oracle_register_client::{OracleRegisterClient, RegisterState as OracleRegisterState, RegisterState};
 use tokio::sync::RwLock;
-use common::RegisterContractInfo;
+use common::{run_lez, RegisterContractInfo};
 use crate::mtree::TreeSnapshot;
 /*
 pub async fn fetch_registered(rc_info: &RegisterContractInfo) -> anyhow::Result<Vec<[u8; 32]>> {
@@ -32,8 +32,14 @@ pub async fn fetch_registered(rc_info: &RegisterContractInfo) -> anyhow::Result<
 */
 
 pub async fn fetch_oracle_register_state(rc_info: &RegisterContractInfo) -> anyhow::Result<RegisterState> {
+    // LEZ calls are not Send - see run_lez doc
+    let rc_info = rc_info.clone();
+    run_lez(move || async move { fetch_oracle_register_state_(&rc_info).await }).await
+}
 
-    let wallet_core = WalletCore::from_env().context("Getting wallet accounts from env")?;
+async fn fetch_oracle_register_state_(rc_info: &RegisterContractInfo) -> anyhow::Result<RegisterState> {
+
+    let wallet_core = WalletCore::from_env().await.context("Getting wallet accounts from env")?;
     let oracle_register_program_id = ProgramId::from(rc_info.oracle_register_program_id);
     let client = OracleRegisterClient::new(&wallet_core, oracle_register_program_id);
 
